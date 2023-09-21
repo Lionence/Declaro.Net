@@ -1,0 +1,56 @@
+name: $(VERSION).$(SEMANTIC_VERSION)
+
+trigger:
+- main
+
+pr:
+- main
+
+variables:
+  VERSION: 1.0
+  SEMANTIC_VERSION: $[counter(variables['VERSION'], 0)]
+
+stages:
+- stage: CI
+  jobs:
+  - job: Build_NuGet_Package
+    steps:
+      - task: DotNetCoreCLI@2
+        displayName: Build NuGet package
+        inputs:
+          command: 'pack'
+          packagesToPack: '**/*.csproj'
+          configuration: 'Release'
+          versioningScheme: 'byBuildNumber'
+      - task: PublishBuildArtifacts@1
+        displayName: Push .nupgk file to Artifacts
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+          ArtifactName: 'nupkg'
+          publishLocation: 'Container'
+- stage: CD
+  dependsOn: CI
+  condition: ne(variables['Build.Reason'], 'PullRequest')
+  jobs:
+    # Using deplyoment job here to control environment and pre-approval for nuget.org public feed deployment
+    - deployment: Deploy_To_NugetOrg_Public_Feed
+      environment:
+        name: Public NugetOrg feed
+      strategy:
+       runOnce:
+         deploy:
+           steps:
+             - task: DownloadBuildArtifacts@1
+               displayName: Pull .nupgk file from Artifacts
+               inputs:
+                buildType: 'current'
+                downloadType: 'single'
+                artifactName: 'nupkg'
+                downloadPath: '$(System.ArtifactsDirectory)'
+             - task: NuGetCommand@2
+               displayName: Publish .nupkg to public nuget.org feed
+               inputs:
+                command: 'push'
+                packagesToPush: '$(Build.ArtifactStagingDirectory)/**/*.nupkg;!$(Build.ArtifactStagingDirectory)/**/*.symbols.nupkg'
+                nuGetFeedType: 'external'
+                publishFeedCredentials: 'nuget.org'
