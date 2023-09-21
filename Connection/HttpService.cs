@@ -10,6 +10,9 @@ using Declaro.Net.Examples;
 
 namespace Declaro.Net.Connection
 {
+    /// <summary>
+    /// Service that handles HTTP requests for Declaro.NET based on implicit definitions.
+    /// </summary>
     public sealed class HttpService
     {
         private readonly HttpClient _httpClient;
@@ -58,72 +61,30 @@ namespace Declaro.Net.Connection
 
         public HttpService(HttpClient httpClient, IMemoryCache memoryCache)
         {
-            _httpClient = httpClient;
-            _memoryCache = memoryCache;
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(HttpClient));
+            _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(IMemoryCache));
         }
 
-        /// <summary>
-        /// Sends HTTP Delete request.
-        /// </summary>
-        /// <typeparam name="TData">Desired data type to recieve and send.</typeparam>
-        /// <param name="data">Data to delete.</param>
-        /// <param name="ct">Cancellation token.</param>
-        public async Task DeleteAsync<TData>(TData data, CancellationToken ct = default)
-        {
-            var config = GetHttpConfig<TData, HttpDeleteAttribute>();
-            var arguments = GetArguments(data, config);
-            ApplyHttpConfig(config, arguments, out var uri);
-            await _httpClient.DeleteAsync(uri, ct);
-        }
 
         /// <summary>
-        /// Sends HTTP POST request. 
+        /// Sends HTTP GET request.
         /// </summary>
-        /// <typeparam name="TData">Desired data type to recieve and send.</typeparam>
-        /// <param name="data">The object used in the request.</param>
+        /// <typeparam name="TResponse">Data type to recieve.</typeparam>
         /// <param name="ct">Cancellation token.</param>
-        /// <returns>With data of desired type.</returns>aram>
-        public async ValueTask<TData?> PostAsync<TData>(TData data, CancellationToken ct = default)
-            where TData : notnull
-            => await PostAsync<TData, TData>(data, ct);
-
-        /// <summary>
-        /// HTTP POST request send and retrieve different data types.
-        /// </summary>
-        /// <typeparam name="TResponse">Desired data type to recieve.</typeparam>
-        /// <typeparam name="TRequest">Data type to send.</typeparam>
-        /// <param name="data">The object used in the request.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>With data of desired type.</returns>
-        public async ValueTask<TResponse?> PostAsync<TResponse, TRequest>(TRequest data, CancellationToken ct = default)
-            where TRequest : notnull
-        {
-            var config = GetHttpConfig<TResponse, HttpPostAttribute>();
-            var arguments = GetArguments(data, config);
-            ApplyHttpConfig(config, arguments, out var uri);
-            var response = await DeserializeResponse<TResponse>(await _httpClient.PostAsJsonAsync(uri, data, ct));
-            return response;
-        }
-
-        /// <summary>
-        /// HTTP GET request for the specified resource.
-        /// </summary>
-        /// <typeparam name="TResponse">Desired resource type to recieve.</typeparam>
-        /// <param name="ct">Cancellation token.</param>
-        /// <param name="arguments">Argument parameters for request.</param>
+        /// <param name="queryParameters">Query parameters.</param>
         /// <returns>Resource requested for specified type.</returns>
-        public async ValueTask<TResponse> GetAsync<TResponse>(CancellationToken ct = default, params object[] arguments)
+        public async ValueTask<TResponse> GetAsync<TResponse>(CancellationToken ct = default, params object[] queryParameters)
             where TResponse : class
         {
             var config = GetHttpConfig<TResponse, HttpGetAttribute>();
-            var cacheKey = GetCacheKey<TResponse>(config, arguments);
+            var cacheKey = GetCacheKey<TResponse, HttpGetAttribute>(config, queryParameters);
 
             if (_memoryCache.TryGetValue(cacheKey, out ICacheEntry? cacheEntry))
             {
                 return cacheEntry?.Value as TResponse ?? throw new UnreachableException();
             }
 
-            ApplyHttpConfig(config, arguments, out var uri);
+            ApplyHttpConfig(config, queryParameters, out var uri);
             var responseMessage = await _httpClient.GetAsync(uri, ct);
             var response = await DeserializeResponse<TResponse>(responseMessage);
 
@@ -138,13 +99,170 @@ namespace Declaro.Net.Connection
             return response ?? throw new NullReferenceException($"Empty response for GET: {typeof(TResponse).Name} on endpoint '{config?.ApiEndpoint}'");
         }
 
-        private static string GetCacheKey<TResponse>(HttpGetAttribute? httpGetConfig = null, params object[] arguments)
+        /// <summary>
+        /// BULK query handling, technically an HTTP POST request.
+        /// </summary>
+        /// <typeparam name="TData">Data type to both recieve and send.</typeparam>
+        /// <param name="data">Object to send.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>With data of desired type - TResponse.</returns>
+        public async ValueTask<TData?> ListAsync<TData>(TData data, CancellationToken ct = default)
+            where TData : class
+            => await ListAsync<TData, TData>(data, ct);
+
+        /// <summary>
+        /// BULK query handling, technically an HTTP POST request.
+        /// </summary>
+        /// <typeparam name="TResponse">Data type to recieve.</typeparam>
+        /// <typeparam name="TRequest">Data type to send.</typeparam>
+        /// <param name="data">Object to send.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>With data of desired type - TResponse.</returns>
+        public async ValueTask<TResponse?> ListAsync<TResponse, TRequest>(TRequest data, CancellationToken ct = default)
+            where TRequest : notnull
             where TResponse : class
         {
-            var config = httpGetConfig ?? GetHttpConfig<TResponse, HttpGetAttribute>();
-            return string.Format(config.ApiEndpoint, arguments ?? Array.Empty<object>());
+            var config = GetHttpConfig<TResponse, HttpListAttribute>();
+            var cacheKey = GetCacheKey<TResponse, HttpListAttribute>(config, null);
+
+            if (_memoryCache.TryGetValue(cacheKey, out ICacheEntry? cacheEntry))
+            {
+                return cacheEntry?.Value as TResponse ?? throw new UnreachableException();
+            }
+
+            ApplyHttpConfig(config, null, out var uri);
+            var response = await DeserializeResponse<TResponse>(await _httpClient.PostAsJsonAsync(uri, data, ct));
+
+            TimeSpan.TryParse(config?.CacheTime, out var cachingTime);
+            if (cachingTime > TimeSpan.Zero)
+            {
+                cacheEntry = _memoryCache.CreateEntry(cacheKey);
+                cacheEntry.Value = response;
+                _memoryCache.Set(cacheKey, cacheEntry, cachingTime);
+            }
+
+            return response;
         }
 
+        /// <summary>
+        /// Sends HTTP POST request. 
+        /// </summary>
+        /// <typeparam name="TData">Data type to both recieve and send.</typeparam>
+        /// <param name="data">Object to send.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>With data of desired type - TResponse.</returns>
+        public async ValueTask<TData?> PostAsync<TData>(TData data, CancellationToken ct = default)
+            where TData : notnull
+            => await PostAsync<TData, TData>(data, ct);
+
+        /// <summary>
+        /// Sends HTTP POST request. 
+        /// </summary>
+        /// <typeparam name="TResponse">Data type to recieve.</typeparam>
+        /// <typeparam name="TRequest">Data type to send.</typeparam>
+        /// <param name="data">Object to send.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>With data of desired type - TResponse.</returns>
+        public async ValueTask<TResponse?> PostAsync<TResponse, TRequest>(TRequest data, CancellationToken ct = default)
+            where TRequest : notnull
+        {
+            var config = GetHttpConfig<TResponse, HttpPostAttribute>();
+            ApplyHttpConfig(config, null, out var uri);
+            var response = await DeserializeResponse<TResponse>(await _httpClient.PostAsJsonAsync(uri, data, ct));
+            return response;
+        }
+
+        /// <summary>
+        /// Sends HTTP PUT request.
+        /// </summary>
+        /// <typeparam name="TData">Data type to both recieve and send.</typeparam>
+        /// <param name="data">Object to send.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>With data of desired type - TResponse.</returns>
+        public async ValueTask<TData?> PutAsync<TData>(TData data, CancellationToken ct = default)
+            where TData : notnull
+            => await PutAsync<TData, TData>(data, ct);
+
+        /// <summary>
+        /// Sends HTTP PUT request. 
+        /// </summary>
+        /// <typeparam name="TResponse">Data type to recieve.</typeparam>
+        /// <typeparam name="TRequest">Data type to send.</typeparam>
+        /// <param name="data">Object to send.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>With data of desired type - TResponse.</returns>
+        public async ValueTask<TResponse?> PutAsync<TResponse, TRequest>(TRequest data, CancellationToken ct = default)
+            where TRequest : notnull
+        {
+            var config = GetHttpConfig<TResponse, HttpPutAttribute>();
+            ApplyHttpConfig(config, null, out var uri);
+            var response = await DeserializeResponse<TResponse>(await _httpClient.PutAsJsonAsync(uri, data, ct));
+            return response;
+        }
+
+        /// <summary>
+        /// Sends HTTP PATCH request.
+        /// </summary>
+        /// <typeparam name="TData">Data type to both recieve and send.</typeparam>
+        /// <param name="data">Object to send.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>With data of desired type - TResponse.</returns>
+        public async ValueTask<TData?> PatchAsync<TData>(TData data, CancellationToken ct = default)
+            where TData : notnull
+            => await PatchAsync<TData, TData>(data, ct);
+
+        /// <summary>
+        /// Sends HTTP PATCH request. 
+        /// </summary>
+        /// <typeparam name="TResponse">Data type to recieve.</typeparam>
+        /// <typeparam name="TRequest">Data type to send.</typeparam>
+        /// <param name="data">Object to send.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>With data of desired type - TResponse.</returns>
+        public async ValueTask<TResponse?> PatchAsync<TResponse, TRequest>(TRequest data, CancellationToken ct = default)
+            where TRequest : notnull
+        {
+            var config = GetHttpConfig<TResponse, HttpPatchAttribute>();
+            ApplyHttpConfig(config, null, out var uri);
+            var response = await DeserializeResponse<TResponse>(await _httpClient.PatchAsJsonAsync(uri, data, ct));
+            return response;
+        }
+
+        /// <summary>
+        /// Sends HTTP DELETE request.
+        /// </summary>
+        /// <typeparam name="TData">Desired data type to recieve and send.</typeparam>
+        /// <param name="data">Data to delete.</param>
+        /// <param name="ct">Cancellation token.</param>
+        public async Task DeleteAsync<TData>(TData data, CancellationToken ct = default)
+        {
+            var config = GetHttpConfig<TData, HttpDeleteAttribute>();
+            var arguments = GetQueryParameters(data, config);
+            ApplyHttpConfig(config, arguments, out var uri);
+            await _httpClient.DeleteAsync(uri, ct);
+        }
+
+        /// <summary>
+        /// Retrieves HTTP response cache key based on config, desied response type and exact API Endpoint.
+        /// </summary>
+        /// <typeparam name="TResponse">Requested data type.</typeparam>
+        /// <param name="httpConfig"></param>
+        /// <param name="queryParameters"></param>
+        /// <returns></returns>
+        private static string GetCacheKey<TResponse, TConfig>(TConfig? httpConfig = null, params object[]? queryParameters)
+            where TResponse : class
+            where TConfig : HttpAttribute, ICacheAttribute
+        {
+            var config = httpConfig ?? GetHttpConfig<TResponse, TConfig>();
+            return string.Format(config.ApiEndpoint, queryParameters ?? Array.Empty<object>());
+        }
+
+        /// <summary>
+        /// Deserializes JSON reponse message and handles unsuccessful responses.
+        /// </summary>
+        /// <typeparam name="TResponse">Type to deserialize into.</typeparam>
+        /// <param name="responseMessage">The response message.</param>
+        /// <exception cref="HttpClientException">Thrown when HTTP request was not successful.</exception>
         private static async ValueTask<TResponse?> DeserializeResponse<TResponse>(HttpResponseMessage? responseMessage)
         {
             if (responseMessage != null)
@@ -164,7 +282,15 @@ namespace Declaro.Net.Connection
             return default;
         }
 
-        private static object[]? GetArguments<TRequest>(TRequest data, HttpAttribute config)
+        /// <summary>
+        /// Extracts query parameters of data based on <see cref="HttpAttribute"/> and <see cref="RequestArgumentAttribute"/> configuration.
+        /// </summary>
+        /// <typeparam name="TRequest">Type of data to use.</typeparam>
+        /// <param name="data">Data object.</param>
+        /// <param name="config"><see cref="HttpAttribute"/> configuration.</param>
+        /// <returns>Array of query parameters.</returns>
+        /// <exception cref="NullReferenceException"></exception>
+        private static object[]? GetQueryParameters<TRequest>(TRequest data, HttpAttribute config)
         {
             if (data == null)
             {
@@ -182,6 +308,11 @@ namespace Declaro.Net.Connection
             return arguments.ToArray();
         }
 
+        /// <summary>
+        /// Gets the requested <see cref="HttpAttribute"/> or default one if exist. Otherwise throws exception.
+        /// </summary>
+        /// <typeparam name="TData">Data type for cache lookup.</typeparam>
+        /// <typeparam name="TAttribute">Type of <see cref="HttpAttribute"/>, you can use its inheritors.</typeparam>
         private static TAttribute GetHttpConfig<TData, TAttribute>()
             where TAttribute : HttpAttribute
         {
@@ -214,8 +345,15 @@ namespace Declaro.Net.Connection
             return result;
         }
 
-        private void ApplyHttpConfig<TAttribute>(TAttribute config, object[]? arguments, out string uri)
-            where TAttribute : HttpAttribute
+        /// <summary>
+        /// Generates endpoint and applies headers to HttpClient.
+        /// </summary>
+        /// <typeparam name="TConfig">Type of HTTP config.</typeparam>
+        /// <param name="config">HTTP config object.</param>
+        /// <param name="queryParameters">Query parameters.</param>
+        /// <param name="uri">Output parameter with the exact endpoint to use.</param>
+        private void ApplyHttpConfig<TConfig>(TConfig config, object[]? queryParameters, out string uri)
+            where TConfig : HttpAttribute
         {
             // Generate endpoint
             int? argLength = config.ArgumentProperties?.Length;
@@ -225,7 +363,7 @@ namespace Declaro.Net.Connection
             }
             else
             {
-                uri = string.Format(config.ApiEndpoint, arguments ?? Array.Empty<object>());
+                uri = string.Format(config.ApiEndpoint, queryParameters ?? Array.Empty<object>());
             }
 
             // Apply headers    

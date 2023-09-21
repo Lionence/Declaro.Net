@@ -7,5 +7,11 @@
         /// Not setting this property will result in no caching.
         /// </summary>
         string? CacheTime { get; set; }
+
+        /// <summary>
+        /// The API endpoint to be used by the request.
+        /// Supports templating.
+        /// </summary>
+        string ApiEndpoint { get; set; }
     }
 }
