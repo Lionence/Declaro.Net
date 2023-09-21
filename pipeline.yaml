@@ -30,7 +30,7 @@ stages:
           publishLocation: 'Container'
 - stage: CD
   dependsOn: CI
-  condition: ne(variables['Build.Reason'], 'PullRequest')
+  condition: and(ne(variables['Build.Reason'], 'PullRequest'),eq(variables['Build.SourceBranchName'], 'main'))
   jobs:
     # Using deplyoment job here to control environment and pre-approval for nuget.org public feed deployment
     - deployment: Deploy_To_NugetOrg_Public_Feed
