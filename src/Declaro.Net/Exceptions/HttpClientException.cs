@@ -1,4 +1,4 @@
-﻿namespace Declaro.Net.Examples
+﻿namespace Declaro.Net.Exceptions
 {
     /// <summary>
     /// Exception representing unsuccessful HTTP request.

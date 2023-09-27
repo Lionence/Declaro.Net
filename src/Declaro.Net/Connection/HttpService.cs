@@ -6,7 +6,7 @@ using Microsoft.Extensions.Caching.Memory;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Collections.ObjectModel;
-using Declaro.Net.Examples;
+using Declaro.Net.Exceptions;
 
 namespace Declaro.Net.Connection
 {
@@ -24,8 +24,8 @@ namespace Declaro.Net.Connection
         {
             var httpConfigCache = new Dictionary<Type, HttpAttribute[]>();
 
-            Assembly.GetExecutingAssembly().GetTypes()
-                .Where(type => type.GetCustomAttributes<HttpAttribute>(true) != null).ToList()
+            AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes())
+                .Where(type => type.GetCustomAttributes<HttpAttribute>(true).Any()).ToList()
                 .ForEach(type =>
                 {
                     IEnumerable<HttpAttribute> attributes = type.GetCustomAttributes<HttpAttribute>(true);
@@ -65,6 +65,21 @@ namespace Declaro.Net.Connection
             _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(IMemoryCache));
         }
 
+        /// <summary>
+        /// Sends HTTP GET request.
+        /// </summary>
+        /// <typeparam name="TResponse">Data type to recieve.</typeparam>
+        /// <typeparam name="TRequest">Data type to send.</typeparam>
+        /// <param name="data">Data object to send.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>Resource requested for specified type.</returns>
+        public async ValueTask<TResponse> GetAsync<TResponse, TRequest>(TRequest data, CancellationToken ct = default)
+            where TResponse : class
+        {
+            var config = GetHttpConfig<TResponse, HttpGetAttribute>();
+            var queryParameters = GetQueryParameters(data, config);
+            return await GetAsync<TResponse>(ct, queryParameters);
+        }
 
         /// <summary>
         /// Sends HTTP GET request.
@@ -73,7 +88,7 @@ namespace Declaro.Net.Connection
         /// <param name="ct">Cancellation token.</param>
         /// <param name="queryParameters">Query parameters.</param>
         /// <returns>Resource requested for specified type.</returns>
-        public async ValueTask<TResponse> GetAsync<TResponse>(CancellationToken ct = default, params object[] queryParameters)
+        public async ValueTask<TResponse> GetAsync<TResponse>(CancellationToken ct = default, params object[]? queryParameters)
             where TResponse : class
         {
             var config = GetHttpConfig<TResponse, HttpGetAttribute>();
@@ -298,11 +313,15 @@ namespace Declaro.Net.Connection
             }
 
             var arguments = new List<object>();
-            foreach (var argProp in data.GetType().GetProperties().Where(p => config?.ArgumentProperties?.Contains(p) ?? false))
+            foreach (var argProp in typeof(TRequest).GetProperties().Where(p => config?.ArgumentProperties?.Contains(p) ?? false))
             {
                 var argConfig = argProp.GetCustomAttribute<RequestArgumentAttribute>(false)
                     ?? throw new NullReferenceException($"Property {argProp.Name} in Type {typeof(TRequest).FullName} is not {nameof(RequestArgumentAttribute)}.");
-                arguments.Insert(argConfig.Index, data);
+                var value = argProp.GetValue(data);
+                if (value != null)
+                {
+                    arguments.Insert(argConfig.Index, value);
+                }
             }
 
             return arguments.ToArray();
