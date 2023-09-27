@@ -84,6 +84,16 @@ namespace Declaro.Net.Connection
         /// <summary>
         /// Sends HTTP GET request.
         /// </summary>
+        /// <typeparam name="TData">Type of both request and response data.</typeparam>
+        /// <param name="requestData">The request data to send.</param>
+        /// <param name="ct">Cancellation token.</param>
+        public async ValueTask<TData> GetAsync<TData>(TData requestData, CancellationToken ct = default)
+            where TData : class
+            => await GetAsync<TData, TData>(requestData, ct);
+
+        /// <summary>
+        /// Sends HTTP GET request.
+        /// </summary>
         /// <typeparam name="TResponse">Data type to recieve.</typeparam>
         /// <param name="ct">Cancellation token.</param>
         /// <param name="queryParameters">Query parameters.</param>
@@ -92,6 +102,13 @@ namespace Declaro.Net.Connection
             where TResponse : class
         {
             var config = GetHttpConfig<TResponse, HttpGetAttribute>();
+
+            int? argLength = config.ArgumentProperties?.Length;
+            if (argLength.HasValue && argLength.Value != queryParameters?.Length)
+            {
+                throw new FormatException($"Number of required parameters '{argLength.Value}' does not equal to actual number of parameters '{queryParameters?.Length}'!");
+            }
+
             var cacheKey = GetCacheKey<TResponse, HttpGetAttribute>(config, queryParameters);
 
             if (_memoryCache.TryGetValue(cacheKey, out ICacheEntry? cacheEntry))
@@ -121,7 +138,7 @@ namespace Declaro.Net.Connection
         /// <param name="data">Object to send.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>With data of desired type - TResponse.</returns>
-        public async ValueTask<TData?> ListAsync<TData>(TData data, CancellationToken ct = default)
+        public async ValueTask<ICollection<TData>?> ListAsync<TData>(TData data, CancellationToken ct = default)
             where TData : class
             => await ListAsync<TData, TData>(data, ct);
 
@@ -133,7 +150,7 @@ namespace Declaro.Net.Connection
         /// <param name="data">Object to send.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>With data of desired type - TResponse.</returns>
-        public async ValueTask<TResponse?> ListAsync<TResponse, TRequest>(TRequest data, CancellationToken ct = default)
+        public async ValueTask<ICollection<TResponse>?> ListAsync<TResponse, TRequest>(TRequest data, CancellationToken ct = default)
             where TRequest : notnull
             where TResponse : class
         {
@@ -142,11 +159,11 @@ namespace Declaro.Net.Connection
 
             if (_memoryCache.TryGetValue(cacheKey, out ICacheEntry? cacheEntry))
             {
-                return cacheEntry?.Value as TResponse ?? throw new UnreachableException();
+                return cacheEntry?.Value as ICollection<TResponse> ?? throw new UnreachableException();
             }
 
             ApplyHttpConfig(config, null, out var uri);
-            var response = await DeserializeResponse<TResponse>(await _httpClient.PostAsJsonAsync(uri, data, ct));
+            var response = await DeserializeResponse<ICollection<TResponse>>(await _httpClient.PostAsJsonAsync(uri, data, ct));
 
             TimeSpan.TryParse(config?.CacheTime, out var cachingTime);
             if (cachingTime > TimeSpan.Zero)
@@ -354,7 +371,7 @@ namespace Declaro.Net.Connection
                 defaultValue.ResponseType = defaultAttribute?.ResponseType;
             }
 
-            var result = (TAttribute?)configs.SingleOrDefault(attr => attr is TAttribute, defaultValue);
+            var result = (TAttribute?)configs.SingleOrDefault(attr => attr?.GetType() == typeof(TAttribute), defaultValue);
 
             if (result == null)
             {

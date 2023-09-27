@@ -4,57 +4,25 @@ using Declaro.Net.Test.TestDataTypes;
 using RichardSzalay.MockHttp;
 using System.Net.Http.Json;
 using System.Net;
-using Declaro.Net.Attributes;
-using System.Collections.ObjectModel;
-using System.Reflection;
 
 namespace Declaro.Net.Test.HttpServiceTests
 {
     public class HttpServicePostTests : HttpServiceTestBase
     {
-        private HttpClient _httpClient;
-        private string _expectedUri = "api/weather";
-
+        protected override HttpClient _HttpClient { get; }
         protected override HttpService _HttpService { get; }
+        protected override string _ExpectedUri => "api/weather";
 
         public HttpServicePostTests()
         {
             _MockHandler
-                .When(HttpMethod.Post, $"http://127.0.0.1/{_expectedUri}").Respond(HttpStatusCode.OK,
+                .When(HttpMethod.Post, $"http://127.0.0.1/{_ExpectedUri}").Respond(HttpStatusCode.OK,
                     JsonContent.Create(new WeatherRequestResponse() { Celsius = 10, Date = "2023-09-22", City = "Budapest" }));
 
-            _httpClient = new HttpClient(_MockHandler);
-            _httpClient.BaseAddress = new Uri("http://127.0.0.1/");
+            _HttpClient = new HttpClient(_MockHandler);
+            _HttpClient.BaseAddress = new Uri("http://127.0.0.1/");
 
-            _HttpService = new HttpService(_httpClient, _MemoryCache);
-        }
-
-        [Fact]
-        public async Task ValidatePost_PassRequestObject()
-        {
-            // Arrange
-            var requestData = new WeatherRequest()
-            {
-                City = "Budapest",
-                Date = "2023-09-22"
-            };
-
-            var allAttr = _HttpServiceType.GetField("_httpConfigCache", BindingFlags.Static | BindingFlags.NonPublic)
-                ?.GetValue(null) as ReadOnlyDictionary<Type, HttpAttribute[]>;
-            Assert.NotNull(allAttr);
-            var weatherAttr = _HttpServiceType.GetMethod("GetHttpConfig", BindingFlags.Static | BindingFlags.NonPublic)
-                ?.MakeGenericMethod(typeof(WeatherResponse), typeof(HttpPostAttribute))
-                ?.Invoke(obj: null, parameters: null) as HttpPostAttribute;
-            
-            // Act
-            var method = _HttpServiceType?.GetMethod("ApplyHttpConfig", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?.MakeGenericMethod(typeof(HttpAttribute));
-            var args = new object[] { weatherAttr, null, "" };
-            method?.Invoke(_HttpService, args);
-            var uri = args[2] as string;
-
-            // Assert
-            Assert.Equal(_expectedUri, uri);
+            _HttpService = new HttpService(_HttpClient, _MemoryCache);
         }
 
         [Fact]

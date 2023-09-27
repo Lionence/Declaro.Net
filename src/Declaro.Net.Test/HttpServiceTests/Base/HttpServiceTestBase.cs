@@ -10,8 +10,12 @@ namespace Declaro.Net.Test.HttpServiceTests.Base
 
         protected readonly IMemoryCache _MemoryCache = new MemoryCache(new MemoryCacheOptions());
 
-        protected abstract HttpService _HttpService { get; }
-
         protected readonly Type _HttpServiceType = typeof(HttpService);
+
+        protected abstract string _ExpectedUri { get; }
+
+        protected abstract HttpClient _HttpClient { get; }
+
+        protected abstract HttpService _HttpService { get; }
     }
 }
