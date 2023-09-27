@@ -3,6 +3,9 @@ name: $(VERSION).$(SEMANTIC_VERSION)
 trigger:
 - main
 - dev
+- feature/*
+- bugfix/*
+- issue/*
 
 pr:
 - main
