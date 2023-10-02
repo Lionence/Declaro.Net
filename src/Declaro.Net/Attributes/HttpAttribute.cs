@@ -3,7 +3,7 @@ using System.Reflection;
 
 namespace Declaro.Net.Attributes
 {
-    [AttributeUsage(AttributeTargets.Class, Inherited = true)]
+    [AttributeUsage(AttributeTargets.Class, Inherited = false)]
     public class HttpAttribute : Attribute
     {
         private HttpAuthorization? _authorization;
@@ -12,7 +12,7 @@ namespace Declaro.Net.Attributes
         /// The API endpoint to be used by the request.
         /// Supports templating.
         /// </summary>
-        public required string ApiEndpoint { get; set; }
+        public string ApiEndpoint { get; set; }
 
         /// <summary>
         /// Authorization method for the API. Do not specify if not required.

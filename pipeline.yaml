@@ -2,6 +2,10 @@ name: $(VERSION).$(SEMANTIC_VERSION)
 
 trigger:
 - main
+- dev
+- feature/*
+- bugfix/*
+- issue/*
 
 pr:
 - main
@@ -15,11 +19,21 @@ stages:
   jobs:
   - job: Build_NuGet_Package
     steps:
+      - task: UseDotNet@2
+        displayName: 'Use .NET Core SDK version 7.x'
+        inputs:
+          packageType: sdk
+          version: 7.x
+          installationPath: $(Agent.ToolsDirectory)/dotnet
+      - task: DotNetCoreCLI@2
+        inputs:
+          command: 'test'
+          projects: 'src/Declaro.Net.Test/Declaro.Net.Tests.csproj'
       - task: DotNetCoreCLI@2
         displayName: Build NuGet package
         inputs:
           command: 'pack'
-          packagesToPack: '**/*.csproj'
+          packagesToPack: 'src/Declaro.Net/Declaro.Net.csproj'
           configuration: 'Release'
           versioningScheme: 'byBuildNumber'
       - task: PublishBuildArtifacts@1

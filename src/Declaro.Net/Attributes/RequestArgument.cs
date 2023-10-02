@@ -6,6 +6,11 @@
     [AttributeUsage(AttributeTargets.Property)]
     public sealed class RequestArgumentAttribute : Attribute
     {
+        public RequestArgumentAttribute(int index)
+        {
+            Index = index;
+        }
+
         /// <summary>
         /// The index.
         /// </summary>
