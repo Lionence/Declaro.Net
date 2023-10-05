@@ -7,6 +7,8 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Collections.ObjectModel;
 using Declaro.Net.Exceptions;
+using System.Text.Json;
+using System.Text;
 
 namespace Declaro.Net.Connection
 {
@@ -200,7 +202,8 @@ namespace Declaro.Net.Connection
         {
             var config = GetHttpConfig<TResponse, HttpPostAttribute>();
             ApplyHttpConfig(config, null, out var uri);
-            var response = await DeserializeResponse<TResponse>(await _httpClient.PostAsJsonAsync(uri, data, ct));
+            var content = new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
+            var response = await DeserializeResponse<TResponse>(await _httpClient.PostAsync(uri, content, ct));
             return response;
         }
 
@@ -228,7 +231,8 @@ namespace Declaro.Net.Connection
         {
             var config = GetHttpConfig<TResponse, HttpPutAttribute>();
             ApplyHttpConfig(config, null, out var uri);
-            var response = await DeserializeResponse<TResponse>(await _httpClient.PutAsJsonAsync(uri, data, ct));
+            var content = new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
+            var response = await DeserializeResponse<TResponse>(await _httpClient.PutAsync(uri, content, ct));
             return response;
         }
 
@@ -256,7 +260,8 @@ namespace Declaro.Net.Connection
         {
             var config = GetHttpConfig<TResponse, HttpPatchAttribute>();
             ApplyHttpConfig(config, null, out var uri);
-            var response = await DeserializeResponse<TResponse>(await _httpClient.PatchAsJsonAsync(uri, data, ct));
+            var content = new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
+            var response = await DeserializeResponse<TResponse>(await _httpClient.PatchAsync(uri, content, ct));
             return response;
         }
 
