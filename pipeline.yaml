@@ -10,7 +10,7 @@ pr:
 
 variables:
   BASE_VERSION: 1.0
-  NEW_VERSION: unset
+  NEW_VERSION: 0.0
 
 stages:
 - stage: CI
