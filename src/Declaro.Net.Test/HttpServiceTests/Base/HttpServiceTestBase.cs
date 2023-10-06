@@ -14,7 +14,7 @@ namespace Declaro.Net.Test.HttpServiceTests.Base
 
         protected abstract string _ExpectedUri { get; }
 
-        protected abstract HttpClient _HttpClient { get; }
+        protected abstract IHttpClientFactory _HttpClientFactory { get; }
 
         protected abstract HttpService _HttpService { get; }
     }

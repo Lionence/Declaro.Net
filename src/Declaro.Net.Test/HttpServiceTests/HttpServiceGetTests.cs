@@ -1,5 +1,6 @@
 using Declaro.Net.Attributes;
 using Declaro.Net.Connection;
+using Declaro.Net.Test.Helpers;
 using Declaro.Net.Test.HttpServiceTests.Base;
 using Declaro.Net.Test.TestDataTypes;
 using RichardSzalay.MockHttp;
@@ -13,7 +14,7 @@ namespace Declaro.Net.Test.HttpServiceTests
     public class HttpServiceGetTests : HttpServiceTestBase
     {
         protected override HttpService _HttpService { get; }
-        protected override HttpClient _HttpClient { get; }
+        protected override IHttpClientFactory _HttpClientFactory { get; }
         protected override string _ExpectedUri => "api/weather?City=Budapest?Date=2023-09-22";
 
         public HttpServiceGetTests()
@@ -22,10 +23,10 @@ namespace Declaro.Net.Test.HttpServiceTests
                 .When(HttpMethod.Get, $"http://127.0.0.1/{_ExpectedUri}").Respond(HttpStatusCode.OK,
                     JsonContent.Create(new WeatherResponse() { Celsius = 10, City = "Budapest" }));
 
-            _HttpClient = new HttpClient(_MockHandler);
-            _HttpClient.BaseAddress = new Uri("http://127.0.0.1/");
 
-            _HttpService = new HttpService(_HttpClient, _MemoryCache);
+            _HttpClientFactory = new MockHttpClientFactory(_MockHandler, "http://127.0.0.1/");
+
+            _HttpService = new HttpService(_HttpClientFactory, _MemoryCache);
         }
 
         [Fact]
