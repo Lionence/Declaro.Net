@@ -17,7 +17,6 @@ stages:
   - job: Build_NuGet_Package
     steps:
       - bash: |
-  
           # Getting the latest version of the package form Nuget.Org
           PACKAGE_NAME="declaro.net"
           API_ENDPOINT="https://api.nuget.org/v3-flatcontainer/$PACKAGE_NAME/index.json"
@@ -39,6 +38,8 @@ stages:
           fi
 
           echo "##vso[task.setvariable variable=NEW_VERSION;]$NEW_VERSION"
+        displayName: Set version of new package
+        condition: eq(variables['Build.SourceBranchName'], 'main')
       - task: UseDotNet@2
         displayName: 'Use .NET Core SDK version 7.x'
         inputs:
@@ -63,6 +64,7 @@ stages:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'
           ArtifactName: 'nupkg'
           publishLocation: 'Container'
+        condition: eq(variables['Build.SourceBranchName'], 'main')
 - stage: CD
   dependsOn: CI
   condition: and(ne(variables['Build.Reason'], 'PullRequest'),eq(variables['Build.SourceBranchName'], 'main'))
