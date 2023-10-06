@@ -40,7 +40,6 @@ stages:
 
           echo "##vso[task.setvariable variable=NEW_VERSION;]$NEW_VERSION"
         displayName: Set version of new package
-        condition: eq(variables['Build.SourceBranchName'], 'main')
       - task: UseDotNet@2
         displayName: 'Use .NET Core SDK version 7.x'
         inputs:
