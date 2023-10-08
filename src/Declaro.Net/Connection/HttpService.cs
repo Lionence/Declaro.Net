@@ -9,7 +9,6 @@ using System.Collections.ObjectModel;
 using Declaro.Net.Exceptions;
 using System.Text.Json;
 using System.Text;
-using System.Net.Http;
 
 namespace Declaro.Net.Connection
 {
@@ -123,6 +122,11 @@ namespace Declaro.Net.Connection
             var responseMessage = await client.GetAsync(uri, ct);
             var response = await DeserializeResponse<TResponse>(responseMessage);
 
+            if (response == null)
+            {
+                throw new NullReferenceException($"Empty response for GET: {typeof(TResponse).Name} on endpoint '{config?.ApiEndpoint}'");
+            }
+
             TimeSpan.TryParse(config?.CacheTime, out var cachingTime);
             if (cachingTime > TimeSpan.Zero)
             {
@@ -131,7 +135,7 @@ namespace Declaro.Net.Connection
                 _memoryCache.Set(cacheKey, cacheEntry, cachingTime);
             }
 
-            return response ?? throw new NullReferenceException($"Empty response for GET: {typeof(TResponse).Name} on endpoint '{config?.ApiEndpoint}'");
+            return response;
         }
 
         /// <summary>
@@ -311,11 +315,7 @@ namespace Declaro.Net.Connection
                     throw new HttpClientException((int)responseMessage.StatusCode, responseMessage.StatusCode.ToString());
                 }
 
-                int messageLength = (await responseMessage.Content.ReadAsByteArrayAsync()).Length;
-                if (messageLength > 0)
-                {
-                    return await responseMessage.Content.ReadFromJsonAsync<TResponse>();
-                }
+                return await responseMessage.Content.ReadFromJsonAsync<TResponse>();
             }
 
             return default;
@@ -337,14 +337,15 @@ namespace Declaro.Net.Connection
             }
 
             var arguments = new List<object>();
-            foreach (var argProp in typeof(TRequest).GetProperties().Where(p => config?.ArgumentProperties?.Contains(p) ?? false))
+            IEnumerable<PropertyInfo> argumentProperties = typeof(TRequest).GetProperties().Where(p => config?.ArgumentProperties?.Contains(p) ?? false);
+            foreach (var property in argumentProperties)
             {
-                var argConfig = argProp.GetCustomAttribute<RequestArgumentAttribute>(false)
-                    ?? throw new NullReferenceException($"Property {argProp.Name} in Type {typeof(TRequest).FullName} is not {nameof(RequestArgumentAttribute)}.");
-                var value = argProp.GetValue(data);
+                var requestArgument = property.GetCustomAttribute<RequestArgumentAttribute>(false)
+                    ?? throw new NullReferenceException($"Property {property.Name} in Type {typeof(TRequest).FullName} is not {nameof(RequestArgumentAttribute)}.");
+                var value = property.GetValue(data);
                 if (value != null)
                 {
-                    arguments.Insert(argConfig.Index, value);
+                    arguments.Insert(requestArgument.Index, value);
                 }
             }
 
@@ -370,10 +371,10 @@ namespace Declaro.Net.Connection
             if(defaultAttribute != null)
             {
                 defaultValue = Activator.CreateInstance<TAttribute>();
+                defaultValue.ApiEndpoint = defaultAttribute.ApiEndpoint;
+                defaultValue.Headers = defaultAttribute.Headers;
                 defaultValue.Authorization = defaultAttribute?.Authorization;
                 defaultValue.ArgumentProperties = defaultAttribute?.ArgumentProperties;
-                defaultValue.Headers = defaultAttribute?.Headers ?? new Dictionary<string, string>();
-                defaultValue.ApiEndpoint = defaultAttribute?.ApiEndpoint ?? string.Empty;
                 defaultValue.RequestType = defaultAttribute?.RequestType;
                 defaultValue.ResponseType = defaultAttribute?.ResponseType;
             }
@@ -399,6 +400,7 @@ namespace Declaro.Net.Connection
             where TConfig : HttpAttribute
         {
             // Generate endpoint
+
             int? argLength = config.ArgumentProperties?.Length;
             if (config.ArgumentProperties == null || !argLength.HasValue || argLength.Value == 0)
             {
