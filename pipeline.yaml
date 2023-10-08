@@ -1,5 +1,3 @@
-name: $(VERSION).$(SEMANTIC_VERSION)
-
 trigger:
 - main
 - dev
@@ -11,14 +9,37 @@ pr:
 - main
 
 variables:
-  VERSION: 1.0
-  SEMANTIC_VERSION: $[counter(variables['VERSION'], 0)]
+  BASE_VERSION: 1.1
+  NEW_VERSION: 0.0
 
 stages:
 - stage: CI
   jobs:
   - job: Build_NuGet_Package
     steps:
+      - bash: |
+          # Getting the latest version of the package form Nuget.Org
+          PACKAGE_NAME="declaro.net"
+          API_ENDPOINT="https://api.nuget.org/v3-flatcontainer/$PACKAGE_NAME/index.json"
+          API_RESPONSE=$(curl -s "$API_ENDPOINT")
+          ALL_VERSIONS=$(echo "$API_RESPONSE" | grep -o '"[0-9]\+\.[0-9]\+\.[0-9]\+"' | tr -d '"' | sort -V)
+          LATEST_VERSION=$(echo "$ALL_VERSIONS" | tail -n 1)
+          LATEST_MAJOR_VERSION=$(echo "$LATEST_VERSION" | cut -d'.' -f1)
+          LATEST_MINOR_VERSION=$(echo "$LATEST_VERSION" | cut -d'.' -f2)
+          LATEST_PATCH_VERSION=$(echo "$LATEST_VERSION" | cut -d'.' -f3)
+
+          # Calculating the NEW_VERSION
+          BASE_MAJOR_VERSION=$(echo "$BASE_VERSION" | cut -d'.' -f1)
+          BASE_MINOR_VERSION=$(echo "$BASE_VERSION" | cut -d'.' -f2)
+          if [ "$BASE_MAJOR_VERSION" -gt "$LATEST_MAJOR_VERSION" ] || [ "$BASE_MINOR_VERSION" -gt "$LATEST_MINOR_VERSION" ]; then
+          NEW_VERSION="$BASE_MAJOR_VERSION.$BASE_MINOR_VERSION.0"
+          else
+          NEW_PATCH_VERSION=$((LATEST_PATCH_VERSION + 1))
+          NEW_VERSION="$BASE_MAJOR_VERSION.$BASE_MINOR_VERSION.$NEW_PATCH_VERSION"
+          fi
+
+          echo "##vso[task.setvariable variable=NEW_VERSION;]$NEW_VERSION"
+        displayName: Set version of new package
       - task: UseDotNet@2
         displayName: 'Use .NET Core SDK version 7.x'
         inputs:
@@ -35,13 +56,15 @@ stages:
           command: 'pack'
           packagesToPack: 'src/Declaro.Net/Declaro.Net.csproj'
           configuration: 'Release'
-          versioningScheme: 'byBuildNumber'
+          versioningScheme: 'byEnvVar'
+          versionEnvVar: 'NEW_VERSION'
       - task: PublishBuildArtifacts@1
         displayName: Push .nupgk file to Artifacts
         inputs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'
           ArtifactName: 'nupkg'
           publishLocation: 'Container'
+        condition: eq(variables['Build.SourceBranchName'], 'main')
 - stage: CD
   dependsOn: CI
   condition: and(ne(variables['Build.Reason'], 'PullRequest'),eq(variables['Build.SourceBranchName'], 'main'))

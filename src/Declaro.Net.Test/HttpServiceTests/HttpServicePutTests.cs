@@ -6,12 +6,13 @@ using System.Net.Http.Json;
 using System.Net;
 using Declaro.Net.Attributes;
 using System.Reflection;
+using Declaro.Net.Test.Helpers;
 
 namespace Declaro.Net.Test.HttpServiceTests
 {
     public class HttpServicePutTests : HttpServiceTestBase
     {
-        protected override HttpClient _HttpClient { get; }
+        protected override IHttpClientFactory _HttpClientFactory { get; }
         protected override HttpService _HttpService { get; }
         protected override string _ExpectedUri => "api/weather";
 
@@ -21,10 +22,10 @@ namespace Declaro.Net.Test.HttpServiceTests
                 .When(HttpMethod.Put, $"http://127.0.0.1/{_ExpectedUri}").Respond(HttpStatusCode.OK,
                     JsonContent.Create(new WeatherRequestResponse() { Celsius = 10, Date = "2023-09-22", City = "Budapest" }));
 
-            _HttpClient = new HttpClient(_MockHandler);
-            _HttpClient.BaseAddress = new Uri("http://127.0.0.1/");
 
-            _HttpService = new HttpService(_HttpClient, _MemoryCache);
+            _HttpClientFactory = new MockHttpClientFactory(_MockHandler, "http://127.0.0.1/");
+
+            _HttpService = new HttpService(_HttpClientFactory, _MemoryCache);
         }
 
         [Fact]

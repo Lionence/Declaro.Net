@@ -17,7 +17,7 @@ namespace Declaro.Net.Connection
     /// </summary>
     public sealed class HttpService
     {
-        private readonly HttpClient _httpClient;
+        private readonly IHttpClientFactory _httpClientFactory;
         private readonly IMemoryCache _memoryCache;
         private static readonly ReadOnlyDictionary<Type, HttpAttribute[]> _httpConfigCache;
 
@@ -61,9 +61,9 @@ namespace Declaro.Net.Connection
             _httpConfigCache = new ReadOnlyDictionary<Type, HttpAttribute[]>(httpConfigCache);
         }
 
-        public HttpService(HttpClient httpClient, IMemoryCache memoryCache)
+        public HttpService(IHttpClientFactory httpClientFactory, IMemoryCache memoryCache)
         {
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(HttpClient));
+            _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(HttpClient));
             _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(IMemoryCache));
         }
 
@@ -118,9 +118,14 @@ namespace Declaro.Net.Connection
                 return cacheEntry?.Value as TResponse ?? throw new UnreachableException();
             }
 
-            ApplyHttpConfig(config, queryParameters, out var uri);
-            var responseMessage = await _httpClient.GetAsync(uri, ct);
+            var client = CreateHttpClient(config, queryParameters, out var uri);
+            var responseMessage = await client.GetAsync(uri, ct);
             var response = await DeserializeResponse<TResponse>(responseMessage);
+
+            if (response == null)
+            {
+                throw new NullReferenceException($"Empty response for GET: {typeof(TResponse).Name} on endpoint '{config?.ApiEndpoint}'");
+            }
 
             TimeSpan.TryParse(config?.CacheTime, out var cachingTime);
             if (cachingTime > TimeSpan.Zero)
@@ -130,7 +135,7 @@ namespace Declaro.Net.Connection
                 _memoryCache.Set(cacheKey, cacheEntry, cachingTime);
             }
 
-            return response ?? throw new NullReferenceException($"Empty response for GET: {typeof(TResponse).Name} on endpoint '{config?.ApiEndpoint}'");
+            return response;
         }
 
         /// <summary>
@@ -164,8 +169,9 @@ namespace Declaro.Net.Connection
                 return cacheEntry?.Value as ICollection<TResponse> ?? throw new UnreachableException();
             }
 
-            ApplyHttpConfig(config, null, out var uri);
-            var response = await DeserializeResponse<ICollection<TResponse>>(await _httpClient.PostAsJsonAsync(uri, data, ct));
+            var client = CreateHttpClient(config, null, out var uri);
+            var content = new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
+            var response = await DeserializeResponse<ICollection<TResponse>>(await client.PostAsync(uri, content, ct));
 
             TimeSpan.TryParse(config?.CacheTime, out var cachingTime);
             if (cachingTime > TimeSpan.Zero)
@@ -201,9 +207,9 @@ namespace Declaro.Net.Connection
             where TRequest : notnull
         {
             var config = GetHttpConfig<TResponse, HttpPostAttribute>();
-            ApplyHttpConfig(config, null, out var uri);
+            var client = CreateHttpClient(config, null, out var uri);
             var content = new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
-            var response = await DeserializeResponse<TResponse>(await _httpClient.PostAsync(uri, content, ct));
+            var response = await DeserializeResponse<TResponse>(await client.PostAsync(uri, content, ct));
             return response;
         }
 
@@ -230,9 +236,9 @@ namespace Declaro.Net.Connection
             where TRequest : notnull
         {
             var config = GetHttpConfig<TResponse, HttpPutAttribute>();
-            ApplyHttpConfig(config, null, out var uri);
+            var client = CreateHttpClient(config, null, out var uri);
             var content = new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
-            var response = await DeserializeResponse<TResponse>(await _httpClient.PutAsync(uri, content, ct));
+            var response = await DeserializeResponse<TResponse>(await client.PutAsync(uri, content, ct));
             return response;
         }
 
@@ -259,9 +265,9 @@ namespace Declaro.Net.Connection
             where TRequest : notnull
         {
             var config = GetHttpConfig<TResponse, HttpPatchAttribute>();
-            ApplyHttpConfig(config, null, out var uri);
+            var client = CreateHttpClient(config, null, out var uri);
             var content = new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
-            var response = await DeserializeResponse<TResponse>(await _httpClient.PatchAsync(uri, content, ct));
+            var response = await DeserializeResponse<TResponse>(await client.PatchAsync(uri, content, ct));
             return response;
         }
 
@@ -275,8 +281,8 @@ namespace Declaro.Net.Connection
         {
             var config = GetHttpConfig<TData, HttpDeleteAttribute>();
             var arguments = GetQueryParameters(data, config);
-            ApplyHttpConfig(config, arguments, out var uri);
-            await _httpClient.DeleteAsync(uri, ct);
+            var client = CreateHttpClient(config, arguments, out var uri);
+            await client.DeleteAsync(uri, ct);
         }
 
         /// <summary>
@@ -309,11 +315,7 @@ namespace Declaro.Net.Connection
                     throw new HttpClientException((int)responseMessage.StatusCode, responseMessage.StatusCode.ToString());
                 }
 
-                int messageLength = (await responseMessage.Content.ReadAsByteArrayAsync()).Length;
-                if (messageLength > 0)
-                {
-                    return await responseMessage.Content.ReadFromJsonAsync<TResponse>();
-                }
+                return await responseMessage.Content.ReadFromJsonAsync<TResponse>();
             }
 
             return default;
@@ -335,14 +337,15 @@ namespace Declaro.Net.Connection
             }
 
             var arguments = new List<object>();
-            foreach (var argProp in typeof(TRequest).GetProperties().Where(p => config?.ArgumentProperties?.Contains(p) ?? false))
+            IEnumerable<PropertyInfo> argumentProperties = typeof(TRequest).GetProperties().Where(p => config?.ArgumentProperties?.Contains(p) ?? false);
+            foreach (var property in argumentProperties)
             {
-                var argConfig = argProp.GetCustomAttribute<RequestArgumentAttribute>(false)
-                    ?? throw new NullReferenceException($"Property {argProp.Name} in Type {typeof(TRequest).FullName} is not {nameof(RequestArgumentAttribute)}.");
-                var value = argProp.GetValue(data);
+                var requestArgument = property.GetCustomAttribute<RequestArgumentAttribute>(false)
+                    ?? throw new NullReferenceException($"Property {property.Name} in Type {typeof(TRequest).FullName} is not {nameof(RequestArgumentAttribute)}.");
+                var value = property.GetValue(data);
                 if (value != null)
                 {
-                    arguments.Insert(argConfig.Index, value);
+                    arguments.Insert(requestArgument.Index, value);
                 }
             }
 
@@ -368,10 +371,10 @@ namespace Declaro.Net.Connection
             if(defaultAttribute != null)
             {
                 defaultValue = Activator.CreateInstance<TAttribute>();
+                defaultValue.ApiEndpoint = defaultAttribute.ApiEndpoint;
+                defaultValue.Headers = defaultAttribute.Headers;
                 defaultValue.Authorization = defaultAttribute?.Authorization;
                 defaultValue.ArgumentProperties = defaultAttribute?.ArgumentProperties;
-                defaultValue.Headers = defaultAttribute?.Headers ?? new Dictionary<string, string>();
-                defaultValue.ApiEndpoint = defaultAttribute?.ApiEndpoint ?? string.Empty;
                 defaultValue.RequestType = defaultAttribute?.RequestType;
                 defaultValue.ResponseType = defaultAttribute?.ResponseType;
             }
@@ -393,10 +396,11 @@ namespace Declaro.Net.Connection
         /// <param name="config">HTTP config object.</param>
         /// <param name="queryParameters">Query parameters.</param>
         /// <param name="uri">Output parameter with the exact endpoint to use.</param>
-        private void ApplyHttpConfig<TConfig>(TConfig config, object[]? queryParameters, out string uri)
+        private HttpClient CreateHttpClient<TConfig>(TConfig config, object[]? queryParameters, out string uri)
             where TConfig : HttpAttribute
         {
             // Generate endpoint
+
             int? argLength = config.ArgumentProperties?.Length;
             if (config.ArgumentProperties == null || !argLength.HasValue || argLength.Value == 0)
             {
@@ -407,11 +411,13 @@ namespace Declaro.Net.Connection
                 uri = string.Format(config.ApiEndpoint, queryParameters ?? Array.Empty<object>());
             }
 
-            // Apply headers    
+            // Apply headers
+            var client = _httpClientFactory.CreateClient();
             foreach (var header in config.Headers)
             {
-                _httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
+                client.DefaultRequestHeaders.Add(header.Key, header.Value);
             }
+            return client;
         }
 
     }

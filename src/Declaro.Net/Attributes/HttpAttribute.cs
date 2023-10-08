@@ -12,7 +12,7 @@ namespace Declaro.Net.Attributes
         /// The API endpoint to be used by the request.
         /// Supports templating.
         /// </summary>
-        public string ApiEndpoint { get; set; }
+        public required string ApiEndpoint { get; set; }
 
         /// <summary>
         /// Authorization method for the API. Do not specify if not required.

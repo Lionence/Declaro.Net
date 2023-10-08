@@ -1,6 +1,7 @@
 ﻿using Declaro.Net.Attributes;
 using Declaro.Net.Connection;
 using Declaro.Net.Exceptions;
+using Declaro.Net.Test.Helpers;
 using Declaro.Net.Test.TestDataTypes;
 using Microsoft.Extensions.Caching.Memory;
 using RichardSzalay.MockHttp;
@@ -31,8 +32,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             mock.When($"http://127.0.0.1/{_ExpectedUri_WithQParams}")
                 .Respond(HttpStatusCode.OK,
                     JsonContent.Create(new WeatherResponse() { Celsius = 10, City = "Budapest" }));
-            var client = new HttpClient(mock);
-            var httpService = new HttpService(client, new MemoryCache(new MemoryCacheOptions()));
+            var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
+            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             var weatherAttr = _HttpServiceType.GetMethod("GetHttpConfig", BindingFlags.Static | BindingFlags.NonPublic)
@@ -45,7 +46,7 @@ namespace Declaro.Net.Test.HttpServiceTests
             var queryParams = method?.Invoke(obj: null, parameters: new object[] { requestData, weatherAttr }) as object[];
             Assert.NotNull(queryParams);
 
-            method = _HttpServiceType?.GetMethod("ApplyHttpConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            method = _HttpServiceType?.GetMethod("CreateHttpClient", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?.MakeGenericMethod(typeof(HttpGetAttribute));
             var args = new object[] { weatherAttr, queryParams, "" };
             method?.Invoke(httpService, args);
@@ -65,8 +66,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             mock.When($"http://127.0.0.1/{_ExpectedUri_WithQParams}")
                 .Respond(HttpStatusCode.OK,
                     JsonContent.Create(new WeatherResponse() { Celsius = 10, City = "Budapest" }));
-            var client = new HttpClient(mock);
-            var httpService = new HttpService(client, new MemoryCache(new MemoryCacheOptions()));
+            var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
+            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
 
             var weatherAttr = _HttpServiceType.GetMethod("GetHttpConfig", BindingFlags.Static | BindingFlags.NonPublic)
                 ?.MakeGenericMethod(typeof(WeatherResponse), typeof(HttpAttribute))
@@ -74,7 +75,7 @@ namespace Declaro.Net.Test.HttpServiceTests
             Assert.NotNull(weatherAttr);
 
             // Act
-            var method = _HttpServiceType?.GetMethod("ApplyHttpConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            var method = _HttpServiceType?.GetMethod("CreateHttpClient", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?.MakeGenericMethod(typeof(HttpAttribute));
             var args = new object?[] { weatherAttr, null, "" };
             method?.Invoke(httpService, args);
@@ -109,9 +110,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             mock.Expect($"http://127.0.0.1/{_ExpectedUri_WithQParams}")
                 .Respond(HttpStatusCode.OK,
                     JsonContent.Create(new WeatherRequestResponse() { Celsius = 10, City = validRequestData.City, Date = validRequestData.Date }));
-            var client = new HttpClient(mock);
-            client.BaseAddress = new Uri("http://127.0.0.1");
-            var httpService = new HttpService(client, new MemoryCache(new MemoryCacheOptions()));
+            var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
+            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             // Assert
@@ -150,7 +150,8 @@ namespace Declaro.Net.Test.HttpServiceTests
                 .Respond(HttpStatusCode.InternalServerError);
             var client = new HttpClient(mock);
             client.BaseAddress = new Uri("http://127.0.0.1");
-            var httpService = new HttpService(client, new MemoryCache(new MemoryCacheOptions()));
+            var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
+            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             // Assert
@@ -174,9 +175,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             var mock = new MockHttpMessageHandler();
             mock.When($"http://127.0.0.1/{_ExpectedUri_WithQParams}")
                 .Respond(HttpStatusCode.NotFound);
-            var client = new HttpClient(mock);
-            client.BaseAddress = new Uri("http://127.0.0.1");
-            var httpService = new HttpService(client, new MemoryCache(new MemoryCacheOptions()));
+            var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
+            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             // Assert
