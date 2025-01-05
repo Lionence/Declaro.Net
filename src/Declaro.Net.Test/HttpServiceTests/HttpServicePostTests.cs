@@ -5,30 +5,26 @@ using RichardSzalay.MockHttp;
 using System.Net.Http.Json;
 using System.Net;
 using Declaro.Net.Test.Helpers;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Declaro.Net.Test.HttpServiceTests
 {
     public class HttpServicePostTests : HttpServiceTestBase
     {
-        protected override IHttpClientFactory _HttpClientFactory { get; }
-        protected override HttpService _HttpService { get; }
-        protected override string _ExpectedUri => "api/weather";
-
-        public HttpServicePostTests()
-        {
-            _MockHandler
-                .When(HttpMethod.Post, $"http://127.0.0.1/{_ExpectedUri}").Respond(HttpStatusCode.OK,
-                    JsonContent.Create(new WeatherRequestResponse() { Celsius = 10, Date = "2023-09-22", City = "Budapest" }));
-
-            _HttpClientFactory = new MockHttpClientFactory(_MockHandler, "http://127.0.0.1/");
-
-            _HttpService = new HttpService(_HttpClientFactory, _MemoryCache);
-        }
-
         [Fact]
         public async Task PostAsync_PassRequestObject_SameRequestResponse()
         {
             // Arrange
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+            var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
+            var memoryCache = new MemoryCache(new MemoryCacheOptions());
+            var httpService = new HttpService(mockHttpClientFactory, memoryCache);
+            var expectedUri = "api/weather?Disctrict=13";
+
+            mockHttpMessageHandler
+                .Expect(HttpMethod.Post, $"http://127.0.0.1/{expectedUri}").Respond(HttpStatusCode.OK,
+                    JsonContent.Create(new WeatherRequestResponse() { Celsius = 10, Date = "2023-09-22", City = "Budapest" }));
+
             var requestData = new WeatherRequest()
             {
                 City = "Budapest",
@@ -36,18 +32,30 @@ namespace Declaro.Net.Test.HttpServiceTests
             };
 
             // Act
-            var response = await _HttpService.PostAsync<WeatherResponse, WeatherRequest>(requestData);
+            var response = await httpService.PostAsync<WeatherResponse, WeatherRequest>(requestData, queryParameters: ("Disctrict", "13"));
 
             // Assert
             Assert.NotNull(response);
             Assert.Equal("Budapest", response.City);
             Assert.Equal(10, response.Celsius);
+
+            mockHttpMessageHandler.VerifyNoOutstandingExpectation();
         }
 
         [Fact]
         public async Task PostAsync_PassRequestObject_DifferentRequestResponse()
         {
             // Arrange
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+            var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
+            var memoryCache = new MemoryCache(new MemoryCacheOptions());
+            var httpService = new HttpService(mockHttpClientFactory, memoryCache);
+            var expectedUri = "api/weather?Disctrict=13";
+
+            mockHttpMessageHandler
+                .Expect(HttpMethod.Post, $"http://127.0.0.1/{expectedUri}").Respond(HttpStatusCode.OK,
+                    JsonContent.Create(new WeatherRequestResponse() { Celsius = 10, Date = "2023-09-22", City = "Budapest" }));
+
             var requestData = new WeatherRequestResponse()
             {
                 City = "Budapest",
@@ -56,13 +64,15 @@ namespace Declaro.Net.Test.HttpServiceTests
             };
 
             // Act
-            var response = await _HttpService.PostAsync<WeatherRequestResponse>(requestData);
+            var response = await httpService.PostAsync<WeatherRequestResponse>(requestData, queryParameters: ("Disctrict", "13"));
 
             // Assert
             Assert.NotNull(response);
             Assert.Equal("Budapest", response.City);
             Assert.Equal("2023-09-22", response.Date);
             Assert.Equal(10, response.Celsius);
+
+            mockHttpMessageHandler.VerifyNoOutstandingExpectation();
         }
     }
 }

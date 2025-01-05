@@ -9,7 +9,7 @@ pr:
 - main
 
 variables:
-  BASE_VERSION: 1.1
+  BASE_VERSION: 1.2
   NEW_VERSION: 0.0
 
 stages:
@@ -41,10 +41,10 @@ stages:
           echo "##vso[task.setvariable variable=NEW_VERSION;]$NEW_VERSION"
         displayName: Set version of new package
       - task: UseDotNet@2
-        displayName: 'Use .NET Core SDK version 7.x'
+        displayName: 'Use .NET Core SDK version 9.x'
         inputs:
           packageType: sdk
-          version: 7.x
+          version: 9.x
           installationPath: $(Agent.ToolsDirectory)/dotnet
       - task: DotNetCoreCLI@2
         inputs:

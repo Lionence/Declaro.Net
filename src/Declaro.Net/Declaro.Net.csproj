@@ -1,23 +1,23 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>$(AssemblyName)</PackageId>
     <Title>Declaro.Net</Title>
     <Authors>Daniel Nagy</Authors>
-    <Company>DevOpsDani</Company>
+    <Company>Lionence</Company>
     <Description>Library for declaratively managing API interactions and HTTP requests.</Description>
     <PackageProjectUrl>https://github.com/devopsdani/Declaro.Net</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/devopsdani/Declaro.Net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageOutputPath>bin\Package</PackageOutputPath>
-    <AssemblyVersion>1.0.0</AssemblyVersion>
-    <FileVersion>1.0.0</FileVersion>
+    <AssemblyVersion>1.2.0</AssemblyVersion>
+    <FileVersion>1.2.0</FileVersion>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <Copyright>Copyright (c) 2023 DevOpsDani</Copyright>
+    <Copyright>Copyright (c) 2024 Lionence</Copyright>
     <PackageIcon>icon.jpeg</PackageIcon>
   </PropertyGroup>
 
@@ -37,9 +37,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="7.0.0" />
-	<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="7.0.0" />
-	<PackageReference Include="Microsoft.Extensions.Http" Version="7.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.0" />
+	<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+	<PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
   </ItemGroup>
 
 </Project>
