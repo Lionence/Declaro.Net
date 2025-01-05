@@ -10,10 +10,6 @@ namespace Declaro.Net.Test.HttpServiceTests
 {
     public class HttpServiceListTests
     {
-        protected string _ExpectedUri => "api/weather";
-
-        public HttpServiceListTests() { }
-
         [Fact]
         public async Task ListAsync_SameType()
         {
@@ -24,19 +20,22 @@ namespace Declaro.Net.Test.HttpServiceTests
                 City = "Budapest",
                 Date = null,
             };
-            var listResponse = new List<WeatherRequestResponse>();
-            listResponse.Add(new WeatherRequestResponse() { Celsius = 10, City = "Budapest", Date = "2023-09-20"});
-            listResponse.Add(new WeatherRequestResponse() { Celsius = 10, City = "Budapest", Date = "2023-09-22"});
-            listResponse.Add(new WeatherRequestResponse() { Celsius = 10, City = "Budapest", Date = "2023-09-25"});
+            var listResponse = new List<WeatherRequestResponse>
+            {
+                new WeatherRequestResponse() { Celsius = 10, City = "Budapest", Date = "2023-09-20" },
+                new WeatherRequestResponse() { Celsius = 10, City = "Budapest", Date = "2023-09-22" },
+                new WeatherRequestResponse() { Celsius = 10, City = "Budapest", Date = "2023-09-25" }
+            };
+            var expectedUri = "api/weather?Disctrict=13";
 
-            var mock = new MockHttpMessageHandler();
-            mock.When(HttpMethod.Post, $"http://127.0.0.1/{_ExpectedUri}")
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+            mockHttpMessageHandler.Expect(HttpMethod.Get, $"http://127.0.0.1/{expectedUri}")
                 .Respond(HttpStatusCode.OK, JsonContent.Create(listResponse));
-            var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
+            var factory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
             var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
-            var response = await httpService.ListAsync(listRequest);
+            var response = await httpService.ListAsync(listRequest, queryParameters: ("Disctrict", "13"));
 
             // Assert
             Assert.NotNull(response);
@@ -44,6 +43,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             Assert.NotStrictEqual(listResponse[0], response.ElementAt(0));
             Assert.NotStrictEqual(listResponse[1], response.ElementAt(1));
             Assert.NotStrictEqual(listResponse[2], response.ElementAt(2));
+
+            mockHttpMessageHandler.VerifyNoOutstandingExpectation();
         }
 
         [Fact]
@@ -55,19 +56,22 @@ namespace Declaro.Net.Test.HttpServiceTests
                 City = "Budapest",
                 Date = "2022-09-27",
             };
-            var listResponse = new List<WeatherResponse>();
-            listResponse.Add(new WeatherResponse() { Celsius = 10, City = "Budapest"});
-            listResponse.Add(new WeatherResponse() { Celsius = 11, City = "Budapest"});
-            listResponse.Add(new WeatherResponse() { Celsius = 12, City = "Budapest"});
+            var listResponse = new List<WeatherResponse>
+            {
+                new WeatherResponse() { Celsius = 10, City = "Budapest" },
+                new WeatherResponse() { Celsius = 11, City = "Budapest" },
+                new WeatherResponse() { Celsius = 12, City = "Budapest" }
+            };
+            var expectedUri = "api/weather?Disctrict=13";
 
-            var mock = new MockHttpMessageHandler();
-            mock.When(HttpMethod.Post, $"http://127.0.0.1/{_ExpectedUri}")
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+            mockHttpMessageHandler.Expect(HttpMethod.Get, $"http://127.0.0.1/{expectedUri}")
                 .Respond(HttpStatusCode.OK, JsonContent.Create(listResponse));
-            var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
+            var factory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
             var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
-            var response = await httpService.ListAsync<WeatherResponse, WeatherRequest>(listRequest);
+            var response = await httpService.ListAsync<WeatherResponse, WeatherRequest>(listRequest, queryParameters: ("Disctrict", "13"));
 
             // Assert
             Assert.NotNull(response);
@@ -75,6 +79,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             Assert.NotStrictEqual(listResponse[0], response.ElementAt(0));
             Assert.NotStrictEqual(listResponse[1], response.ElementAt(1));
             Assert.NotStrictEqual(listResponse[2], response.ElementAt(2));
+
+            mockHttpMessageHandler.VerifyNoOutstandingExpectation();
         }
     }
 }
