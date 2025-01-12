@@ -4,10 +4,12 @@ using Declaro.Net.Exceptions;
 using Declaro.Net.Test.Helpers;
 using Declaro.Net.Test.TestDataTypes;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using RichardSzalay.MockHttp;
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
+using static Declaro.Net.DependencyInjection;
 
 namespace Declaro.Net.Test.HttpServiceTests
 {
@@ -250,7 +252,40 @@ namespace Declaro.Net.Test.HttpServiceTests
                 requestArguments: new object[] { requestData.City, requestData.City }));
             Assert.True(exception.StatusCode == 404);
             Assert.True(exception.Message == HttpStatusCode.NotFound.ToString());
+        }
+
+        [Fact]
+        public void Validate_DependencyInjectionWorkingWithoutAction()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddHttpService();
+
+            // Act
+            var factory = services.Single(s => s.ServiceType == typeof(IHttpClientFactory));
+            var client = typeof(HttpClientFactory).GetMethod("CreateClient")?.Invoke(factory.ImplementationInstance, ["test"]) as HttpClient;
             
+            // Assert
+            Assert.True(client?.BaseAddress == null);
+        }
+
+        [Fact]
+        public void Validate_DependencyInjectionWorkingWithAction()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            var expectedBaseAddress = "https://localhost:8080/";
+            services.AddHttpService(client =>
+            {
+                client.BaseAddress = new Uri(expectedBaseAddress);
+            });
+
+            // Act
+            var factory = services.Single(s => s.ServiceType == typeof(IHttpClientFactory));
+            var client = typeof(HttpClientFactory).GetMethod("CreateClient")?.Invoke(factory.ImplementationInstance, ["test"]) as HttpClient;
+
+            // Assert
+            Assert.True(client?.BaseAddress?.ToString() == expectedBaseAddress);
         }
     }
 }

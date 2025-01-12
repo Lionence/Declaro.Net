@@ -122,5 +122,29 @@ namespace Declaro.Net.Test.HttpServiceTests
 
             Assert.False(cacheStillExist);
         }
+
+        [Fact]
+        public async Task Test()
+        {
+            // Arrange
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+            var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
+            var memoryCache = new MemoryCache(new MemoryCacheOptions());
+            var httpService = new HttpService(mockHttpClientFactory, memoryCache);
+            var expectedUri = "umbraco/delivery/api/v2/content/item/8f07cf10-14ad-42a9-b0c8-562c40fc939e";
+
+            mockHttpMessageHandler
+                .Expect(HttpMethod.Get, $"http://127.0.0.1/{expectedUri}").Respond(HttpStatusCode.OK,
+                    JsonContent.Create(new Website() { Id = Guid.Parse("8f07cf10-14ad-42a9-b0c8-562c40fc939e") }));
+
+            // Act
+            var response = await httpService.GetAsync<Website>(requestArguments: ["8f07cf10-14ad-42a9-b0c8-562c40fc939e"]);
+
+            // Assert
+            Assert.NotNull(response);
+            Assert.Equal("8f07cf10-14ad-42a9-b0c8-562c40fc939e", response.Id.ToString());
+
+            mockHttpMessageHandler.VerifyNoOutstandingExpectation();
+        }
     }
 }
