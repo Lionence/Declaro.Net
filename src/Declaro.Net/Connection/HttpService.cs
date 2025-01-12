@@ -9,6 +9,7 @@ using System.Collections.ObjectModel;
 using Declaro.Net.Exceptions;
 using System.Text.Json;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace Declaro.Net.Connection;
 
@@ -17,8 +18,9 @@ namespace Declaro.Net.Connection;
 /// </summary>
 public sealed class HttpService
 {
+    private readonly ILogger _logger;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IMemoryCache _memoryCache;
+    private readonly IMemoryCache? _memoryCache;
     private static readonly ReadOnlyDictionary<Type, HttpAttribute[]> _httpConfigCache;
 
     // Builds _HttpConfigCache from all types of the assembly, that have any of the HttpAttributes defined.
@@ -61,10 +63,26 @@ public sealed class HttpService
         _httpConfigCache = new ReadOnlyDictionary<Type, HttpAttribute[]>(httpConfigCache);
     }
 
-    public HttpService(IHttpClientFactory httpClientFactory, IMemoryCache memoryCache)
+    public HttpService(ILogger logger, IHttpClientFactory httpClientFactory, IMemoryCache? memoryCache)
     {
+        _logger = logger;
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(HttpClient));
-        _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(IMemoryCache));
+        _memoryCache = memoryCache;
+
+        bool warn = false;
+        foreach (var config in _httpConfigCache)
+        {
+            var hasCachedAttribute = config.Value.Any(a => a.GetType().GetInterface(nameof(ICacheAttribute)) != null);
+            if (memoryCache == null && hasCachedAttribute)
+            {
+                warn = true;
+                break;
+            }
+        }
+        if (warn)
+        {
+            logger.LogWarning("{HttpService} detected cached configuration but is not able to cache because {memoryCache} is missing!", nameof(HttpService), nameof(memoryCache));
+        }
     }
 
     /// <summary>
@@ -113,7 +131,7 @@ public sealed class HttpService
 
         var uri = GetUri(config, requestArguments, queryParameters);
 
-        if (_memoryCache.TryGetValue(uri, out ICacheEntry? cacheEntry))
+        if (_memoryCache != null && _memoryCache.TryGetValue(uri, out ICacheEntry? cacheEntry))
         {
             return cacheEntry?.Value as TResponse ?? throw new UnreachableException();
         }
@@ -128,7 +146,7 @@ public sealed class HttpService
         }
 
         TimeSpan.TryParse(config?.CacheTime, out var cachingTime);
-        if (cachingTime > TimeSpan.Zero)
+        if (_memoryCache != null && cachingTime > TimeSpan.Zero)
         {
             cacheEntry = _memoryCache.CreateEntry(uri);
             cacheEntry.Value = response;
@@ -164,7 +182,7 @@ public sealed class HttpService
         var config = GetHttpConfig<TResponse, HttpListAttribute>();
         var uri = GetUri(config, null, queryParameters);
 
-        if (_memoryCache.TryGetValue(uri, out ICacheEntry? cacheEntry))
+        if (_memoryCache != null && _memoryCache.TryGetValue(uri, out ICacheEntry? cacheEntry))
         {
             return cacheEntry?.Value as ICollection<TResponse> ?? throw new UnreachableException();
         }
@@ -174,7 +192,7 @@ public sealed class HttpService
         var response = await DeserializeResponse<ICollection<TResponse>>(await client.GetAsync(uri, ct));
 
         TimeSpan.TryParse(config?.CacheTime, out var cachingTime);
-        if (cachingTime > TimeSpan.Zero)
+        if (_memoryCache != null && cachingTime > TimeSpan.Zero)
         {
             cacheEntry = _memoryCache.CreateEntry(uri);
             cacheEntry.Value = response;

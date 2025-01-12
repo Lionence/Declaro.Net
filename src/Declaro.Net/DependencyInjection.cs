@@ -1,6 +1,5 @@
 ﻿using Declaro.Net.Connection;
 using Microsoft.Extensions.DependencyInjection;
-using System.Net;
 
 namespace Declaro.Net
 {
@@ -9,7 +8,7 @@ namespace Declaro.Net
         public static IServiceCollection AddHttpService(this IServiceCollection serviceCollection, Action<HttpClient>? configureHttpClient = null)
         {
             var httpclientFactor = new HttpClientFactory(configureHttpClient);
-            serviceCollection.AddSingleton<IHttpClientFactory>(httpclientFactor);
+            serviceCollection.AddKeyedSingleton<IHttpClientFactory>("f7b68ed9-749f-4d9f-a537-4416e6084b30_Declaro_HttpClientFactory", httpclientFactor);
             serviceCollection.AddSingleton<HttpService>();
             return serviceCollection;
         }

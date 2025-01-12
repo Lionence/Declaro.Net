@@ -3,6 +3,7 @@ using Declaro.Net.Test.Helpers;
 using Declaro.Net.Test.HttpServiceTests.Base;
 using Declaro.Net.Test.TestDataTypes;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using RichardSzalay.MockHttp;
 using System.Net;
 using System.Net.Http.Json;
@@ -18,7 +19,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             var mockHttpMessageHandler = new MockHttpMessageHandler();
             var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
-            var httpService = new HttpService(mockHttpClientFactory, memoryCache);
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, mockHttpClientFactory, memoryCache);
             var expectedUri = "api/weather?City=Budapest&Date=2023-09-22&District=13";
 
             mockHttpMessageHandler
@@ -49,7 +51,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             var mockHttpMessageHandler = new MockHttpMessageHandler();
             var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
-            var httpService = new HttpService(mockHttpClientFactory, memoryCache);
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, mockHttpClientFactory, memoryCache);
             var expectedUri = "api/weather?City=Budapest&Date=2023-09-22&District=13";
 
             mockHttpMessageHandler
@@ -76,7 +79,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             var mockHttpMessageHandler = new MockHttpMessageHandler();
             var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
-            var httpService = new HttpService(mockHttpClientFactory, memoryCache);
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, mockHttpClientFactory, memoryCache);
             var expectedUri = "api/weather?City=Budapest&Date=2023-09-22&District=13";
 
             mockHttpMessageHandler
