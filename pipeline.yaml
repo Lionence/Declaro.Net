@@ -47,6 +47,7 @@ stages:
           version: 9.x
           installationPath: $(Agent.ToolsDirectory)/dotnet
       - task: DotNetCoreCLI@2
+        displayName: Test
         inputs:
           command: 'test'
           projects: 'src/Declaro.Net.Test/Declaro.Net.Tests.csproj'
