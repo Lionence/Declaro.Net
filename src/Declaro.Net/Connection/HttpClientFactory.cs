@@ -2,9 +2,9 @@
 
 public class HttpClientFactory : IHttpClientFactory
 {
-    private readonly Action<HttpClient>? _configureHttpClient;
+    private readonly Func<HttpClient, HttpClient>? _configureHttpClient;
 
-    public HttpClientFactory(Action<HttpClient>? configureHttpClient = null)
+    public HttpClientFactory(Func<HttpClient, HttpClient>? configureHttpClient = null)
     {
         _configureHttpClient = configureHttpClient;
     }
@@ -14,7 +14,7 @@ public class HttpClientFactory : IHttpClientFactory
         var client = new HttpClient();
         if(_configureHttpClient != null)
         {
-            _configureHttpClient(client);
+            client = _configureHttpClient(client);
         }
         return client;
     }

@@ -99,7 +99,7 @@ namespace Declaro.Net.Test.HttpServiceTests
 
             // Act
             var cachedBeforeCall = memoryCache.TryGetValue(expectedUri, out _);
-            var response1 = await httpService.GetAsync<WeatherCached>(
+            var response1 = await httpService.GetAsync<CachedWeatherResponse>(
                 requestArguments: [requestData.City, requestData.Date],
                 queryParameters: ("District", "13"));
 
@@ -107,7 +107,7 @@ namespace Declaro.Net.Test.HttpServiceTests
             mockHttpMessageHandler.ResetExpectations();
 
             var cachedAfterCall = memoryCache.TryGetValue(expectedUri, out _);
-            var response2 = await httpService.GetAsync<WeatherCached>(
+            var response2 = await httpService.GetAsync<CachedWeatherResponse>(
                 requestArguments: [requestData.City, requestData.Date],
                 queryParameters: ("District", "13"));
 

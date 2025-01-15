@@ -55,5 +55,10 @@ namespace Declaro.Net.Attributes
         /// Properties to scrape for arguments before making request.
         /// </summary>
         public PropertyInfo[]? ArgumentProperties { get; set; }
+
+        /// <summary>
+        /// The JSON Property where this data type must be deserialized from.
+        /// </summary>
+        public string? FromJsonProperty { get; set; }
     }
 }
