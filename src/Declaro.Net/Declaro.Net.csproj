@@ -9,15 +9,16 @@
     <Authors>Daniel Nagy</Authors>
     <Company>Lionence</Company>
     <Description>Library for declaratively managing API interactions and HTTP requests.</Description>
-    <PackageProjectUrl>https://github.com/devopsdani/Declaro.Net</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/lionence/Declaro.Net</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <RepositoryUrl>https://github.com/devopsdani/Declaro.Net</RepositoryUrl>
+    <RepositoryUrl>https://github.com/lionence/Declaro.Net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageOutputPath>bin\Package</PackageOutputPath>
-    <AssemblyVersion>1.2.0</AssemblyVersion>
-    <FileVersion>1.2.0</FileVersion>
+    <AssemblyVersion>1.3.0</AssemblyVersion>
+    <FileVersion>1.3.0</FileVersion>
+	  <Version>1.3.0</Version>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <Copyright>Copyright (c) 2024 Lionence</Copyright>
+    <Copyright>Copyright (c) 2025 Lionence</Copyright>
     <PackageIcon>icon.jpeg</PackageIcon>
   </PropertyGroup>
 

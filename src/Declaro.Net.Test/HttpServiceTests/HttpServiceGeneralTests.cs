@@ -4,6 +4,9 @@ using Declaro.Net.Exceptions;
 using Declaro.Net.Test.Helpers;
 using Declaro.Net.Test.TestDataTypes;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Moq;
 using RichardSzalay.MockHttp;
 using System.Net;
 using System.Net.Http.Json;
@@ -35,7 +38,8 @@ namespace Declaro.Net.Test.HttpServiceTests
                 .Respond(HttpStatusCode.OK,
                     JsonContent.Create(new WeatherResponse() { Celsius = 10, City = "Budapest" }));
             var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
-            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             var weatherAttr = _HttpServiceType.GetMethod("GetHttpConfig", BindingFlags.Static | BindingFlags.NonPublic)
@@ -68,7 +72,8 @@ namespace Declaro.Net.Test.HttpServiceTests
                 .Respond(HttpStatusCode.OK,
                     JsonContent.Create(new WeatherResponse() { Celsius = 10, City = "Budapest" }));
             var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
-            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()));
 
             var weatherAttr = _HttpServiceType.GetMethod("GetHttpConfig", BindingFlags.Static | BindingFlags.NonPublic)
                 ?.MakeGenericMethod(typeof(WeatherResponse), typeof(HttpAttribute))
@@ -100,7 +105,8 @@ namespace Declaro.Net.Test.HttpServiceTests
                 .Respond(HttpStatusCode.OK,
                     JsonContent.Create(new WeatherResponse() { Celsius = 10, City = "Budapest" }));
             var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
-            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             var weatherAttr = _HttpServiceType.GetMethod("GetHttpConfig", BindingFlags.Static | BindingFlags.NonPublic)
@@ -134,7 +140,8 @@ namespace Declaro.Net.Test.HttpServiceTests
                 .Respond(HttpStatusCode.OK,
                     JsonContent.Create(new WeatherResponse() { Celsius = 10, City = "Budapest" }));
             var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
-            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()));
 
             var weatherAttr = _HttpServiceType.GetMethod("GetHttpConfig", BindingFlags.Static | BindingFlags.NonPublic)
                 ?.MakeGenericMethod(typeof(WeatherResponse), typeof(HttpAttribute))
@@ -177,7 +184,8 @@ namespace Declaro.Net.Test.HttpServiceTests
                 .Respond(HttpStatusCode.OK,
                     JsonContent.Create(new WeatherRequestResponse() { Celsius = 10, City = validRequestData.City, Date = validRequestData.Date }));
             var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
-            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             // Assert
@@ -217,7 +225,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             var client = new HttpClient(mock);
             client.BaseAddress = new Uri("http://127.0.0.1");
             var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
-            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             // Assert
@@ -242,7 +251,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             mock.When($"http://127.0.0.1/{_ExpectedUri_WithRequestArguments}")
                 .Respond(HttpStatusCode.NotFound);
             var factory = new MockHttpClientFactory(mock, "http://127.0.0.1/");
-            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             // Assert
@@ -250,7 +260,209 @@ namespace Declaro.Net.Test.HttpServiceTests
                 requestArguments: new object[] { requestData.City, requestData.City }));
             Assert.True(exception.StatusCode == 404);
             Assert.True(exception.Message == HttpStatusCode.NotFound.ToString());
-            
+        }
+
+        [Fact]
+        public async Task Validate_DependencyInjection_Without_Action()
+        {
+            // Arrange
+            var expectedUri = "api/weather?City=Budapest&Date=2023-09-22&District=13";
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+            mockHttpMessageHandler
+                .Expect(HttpMethod.Get, $"{expectedUri}").Respond(HttpStatusCode.OK,
+                    JsonContent.Create(new CachedWeatherResponse() { Celsius = 10, City = "Budapest" }));
+
+            var services = new ServiceCollection();
+            services.AddHttpService();
+
+            // Act
+            var factory = services.Single(s => s.IsKeyedService && s.ServiceKey == "f7b68ed9-749f-4d9f-a537-4416e6084b30_Declaro_HttpClientFactory");
+            var client = typeof(HttpClientFactory).GetMethod("CreateClient")?.Invoke(factory.KeyedImplementationInstance, ["test"]) as HttpClient;
+
+            // Assert
+            Assert.True(client != null && client.BaseAddress == null);
+
+            var mockLogger = new Mock<ILogger<HttpService>>();
+            var httpService = new HttpService(mockLogger.Object, factory.KeyedImplementationInstance as IHttpClientFactory, null);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await httpService.GetAsync<CachedWeatherResponse, WeatherRequest>(
+                new WeatherRequest()
+                {
+                    City = "Budapest",
+                    Date = "2023-09-22"
+                },
+                queryParameters: ("District", "13")));
+
+        }
+
+        [Fact]
+        public async Task Validate_DependencyInjection_With_Action()
+        {
+            // Arrange
+            var expectedBaseAddress = "http://127.0.0.1/";
+            var expectedUri = "api/weather?City=Budapest&Date=2023-09-22&District=13";
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+            mockHttpMessageHandler
+                .Expect(HttpMethod.Get, $"{expectedBaseAddress}{expectedUri}").Respond(HttpStatusCode.OK,
+                    JsonContent.Create(new CachedWeatherResponse() { Celsius = 10, City = "Budapest" }));
+
+            var services = new ServiceCollection();
+            services.AddHttpService(client =>
+            {
+                client = mockHttpMessageHandler.ToHttpClient();
+                client.BaseAddress = new Uri(expectedBaseAddress);
+                return client;
+            });
+
+            // Act
+            var factory = services.Single(s => s.IsKeyedService && s.ServiceKey == "f7b68ed9-749f-4d9f-a537-4416e6084b30_Declaro_HttpClientFactory");
+            var client = typeof(HttpClientFactory).GetMethod("CreateClient")?.Invoke(factory.KeyedImplementationInstance, ["test"]) as HttpClient;
+
+            // Assert
+            Assert.True(client?.BaseAddress?.ToString() == expectedBaseAddress);
+
+            // Arrange 2
+            var mockLogger = new Mock<ILogger<HttpService>>();
+            var httpService = new HttpService(mockLogger.Object, factory.KeyedImplementationInstance as IHttpClientFactory, null);
+
+            // Act 2
+            var response = await httpService.GetAsync<CachedWeatherResponse, WeatherRequest>(
+                new WeatherRequest()
+                {
+                    City = "Budapest",
+                    Date = "2023-09-22"
+                },
+                queryParameters: ("District", "13"));
+
+            // Assert 2
+            Assert.NotNull(response);
+            Assert.Equal("Budapest", response.City);
+            Assert.Equal(10, response.Celsius);
+        }
+
+        [Fact]
+        public void Validate_Missing_MemoryCache_Logs_Warning()
+        {
+            // Arrange
+            var mockLogger = new Mock<ILogger<HttpService>>();
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+            var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
+            var httpService = new HttpService(mockLogger.Object, mockHttpClientFactory, null);
+
+            // Assert
+            mockLogger.Verify(
+                x => x.Log(
+                    LogLevel.Warning,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((v, t) => true),
+                    It.IsAny<Exception>(),
+                    (Func<It.IsAnyType, Exception, string>)It.IsAny<object>()),
+                Times.Once);
+        }
+
+        [Fact]
+        public async Task Validate_Without_RequestArgumentAttribute()
+        {
+            // Arrange
+            var mockLogger = new Mock<ILogger<HttpService>>();
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+            var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
+            var httpService = new HttpService(mockLogger.Object, mockHttpClientFactory, null);
+            var expectedUri = "api/cities/asd";
+
+            mockHttpMessageHandler
+                .Expect(HttpMethod.Get, $"http://127.0.0.1/{expectedUri}").Respond(HttpStatusCode.OK,
+                    JsonContent.Create(new CityDataWithoutRequestParameterArgument()
+                    {
+                        Name = "Budapest",
+                        Country = "Hungary"
+                    }));
+
+            // Act
+            var response = await httpService.GetAsync<CityDataWithoutRequestParameterArgument>(requestArguments: ["asd"]);
+
+            // Assert
+
+            Assert.True(response.Name == "Budapest");
+            Assert.True(response.Country == "Hungary");
+        }
+
+        [Fact]
+        public async Task Validate_JsonIgnore_Attribute()
+        {
+            // Arrange
+            var mockLogger = new Mock<ILogger<HttpService>>();
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+            var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
+            var httpService = new HttpService(mockLogger.Object, mockHttpClientFactory, null);
+            var expectedUri = "api/cities/asd";
+
+            mockHttpMessageHandler
+                .Expect(HttpMethod.Get, $"http://127.0.0.1/{expectedUri}").Respond(HttpStatusCode.OK,
+                    JsonContent.Create(new JsonIgnoreCityData()
+                    {
+                        Id = "asd",
+                        Name = "Budapest",
+                        Country = "Hungary"
+                    }));
+
+            // Act
+
+            var response = await httpService.GetAsync<JsonIgnoreCityData>(requestArguments: ["asd"]);
+
+            // Assert
+
+            Assert.True(string.IsNullOrEmpty(response.Id));
+            Assert.True(response.Name == "Budapest");
+            Assert.True(response.Country == "Hungary");
+        }
+
+        [Fact]
+        public async Task Validate_FromJsonProperty_Feature()
+        {
+            // Arrange
+            var mockLogger = new Mock<ILogger<HttpService>>();
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+            var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
+            var httpService = new HttpService(mockLogger.Object, mockHttpClientFactory, null);
+            var expectedUri = "api/weather?City=Budapest";
+
+            mockHttpMessageHandler
+                .Expect(HttpMethod.Get, $"http://127.0.0.1/{expectedUri}").Respond(HttpStatusCode.OK,
+                    JsonContent.Create(new WeatherWithCityClass()
+                    {
+                        Celsius = 10,
+                        City = "Budapest",
+                        CityData = new CityData() { City = "Budapest", Country = "Hungary" }
+                    }));
+
+            // Act
+
+            var response = await httpService.GetAsync<CityData>(requestArguments: ["Budapest"]);
+
+            // Assert
+
+            Assert.True(response.City == "Budapest");
+            Assert.True(response.Country == "Hungary");
+        }
+
+        [Fact]
+        public void Validate_DependencyInjection_Logger_Found()
+        {
+            // Arrange
+            var sp = new ServiceCollection()
+            .AddLogging()
+            .AddMemoryCache()
+            .AddHttpService(c => { c.BaseAddress = new Uri("https://127.0.0.1/"); return c; })
+            .BuildServiceProvider();
+
+            // Act
+            var httpService = sp.GetRequiredService<HttpService>();
+
+            // Assert
+
+            Assert.True(httpService != null);
         }
     }
 }
