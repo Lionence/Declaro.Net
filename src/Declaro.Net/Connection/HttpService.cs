@@ -18,7 +18,7 @@ namespace Declaro.Net.Connection;
 /// </summary>
 public sealed class HttpService
 {
-    private readonly ILogger _logger;
+    private readonly ILogger<HttpService> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IMemoryCache? _memoryCache;
     private static readonly ReadOnlyDictionary<Type, HttpAttribute[]> _httpConfigCache;
@@ -64,7 +64,7 @@ public sealed class HttpService
         _httpConfigCache = new ReadOnlyDictionary<Type, HttpAttribute[]>(httpConfigCache);
     }
 
-    public HttpService(ILogger logger, IHttpClientFactory httpClientFactory, IMemoryCache? memoryCache)
+    public HttpService(ILogger<HttpService> logger, IHttpClientFactory httpClientFactory, IMemoryCache? memoryCache)
     {
         _logger = logger;
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(HttpClient));
