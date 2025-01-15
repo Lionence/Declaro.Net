@@ -9,6 +9,7 @@ using System.Collections.ObjectModel;
 using Declaro.Net.Exceptions;
 using System.Text.Json;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace Declaro.Net.Connection;
 
@@ -17,9 +18,11 @@ namespace Declaro.Net.Connection;
 /// </summary>
 public sealed class HttpService
 {
+    private readonly ILogger _logger;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IMemoryCache _memoryCache;
+    private readonly IMemoryCache? _memoryCache;
     private static readonly ReadOnlyDictionary<Type, HttpAttribute[]> _httpConfigCache;
+    private static JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
     // Builds _HttpConfigCache from all types of the assembly, that have any of the HttpAttributes defined.
     static HttpService()
@@ -61,10 +64,26 @@ public sealed class HttpService
         _httpConfigCache = new ReadOnlyDictionary<Type, HttpAttribute[]>(httpConfigCache);
     }
 
-    public HttpService(IHttpClientFactory httpClientFactory, IMemoryCache memoryCache)
+    public HttpService(ILogger logger, IHttpClientFactory httpClientFactory, IMemoryCache? memoryCache)
     {
+        _logger = logger;
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(HttpClient));
-        _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(IMemoryCache));
+        _memoryCache = memoryCache;
+
+        bool warn = false;
+        foreach (var config in _httpConfigCache)
+        {
+            var hasCachedAttribute = config.Value.Any(a => a.GetType().GetInterface(nameof(ICacheAttribute)) != null);
+            if (memoryCache == null && hasCachedAttribute)
+            {
+                warn = true;
+                break;
+            }
+        }
+        if (warn)
+        {
+            logger.LogWarning("{HttpService} detected cached configuration but is not able to cache because {memoryCache} is missing!", nameof(HttpService), nameof(memoryCache));
+        }
     }
 
     /// <summary>
@@ -105,22 +124,23 @@ public sealed class HttpService
     {
         var config = GetHttpConfig<TResponse, HttpGetAttribute>();
 
+        int requiredArgumentsCount = GetRequiredArguments(config.ApiEndpoint);
         int? argLength = config.ArgumentProperties?.Length;
-        if (argLength.HasValue && argLength.Value != requestArguments?.Length)
+        if (requiredArgumentsCount != requestArguments?.Length && argLength.HasValue && argLength.Value != requestArguments?.Length)
         {
             throw new FormatException($"Number of required request arguments '{argLength.Value}' does not equal to actual number of request arguments '{requestArguments?.Length}'!");
         }
 
         var uri = GetUri(config, requestArguments, queryParameters);
 
-        if (_memoryCache.TryGetValue(uri, out ICacheEntry? cacheEntry))
+        if (_memoryCache != null && _memoryCache.TryGetValue(uri, out ICacheEntry? cacheEntry))
         {
             return cacheEntry?.Value as TResponse ?? throw new UnreachableException();
         }
 
         var client = CreateHttpClient(config, uri);
         var responseMessage = await client.GetAsync(uri, ct);
-        var response = await DeserializeResponse<TResponse>(responseMessage);
+        var response = await DeserializeResponse<TResponse>(responseMessage, config.FromJsonProperty);
 
         if (response == null)
         {
@@ -128,7 +148,7 @@ public sealed class HttpService
         }
 
         TimeSpan.TryParse(config?.CacheTime, out var cachingTime);
-        if (cachingTime > TimeSpan.Zero)
+        if (_memoryCache != null && cachingTime > TimeSpan.Zero)
         {
             cacheEntry = _memoryCache.CreateEntry(uri);
             cacheEntry.Value = response;
@@ -164,17 +184,17 @@ public sealed class HttpService
         var config = GetHttpConfig<TResponse, HttpListAttribute>();
         var uri = GetUri(config, null, queryParameters);
 
-        if (_memoryCache.TryGetValue(uri, out ICacheEntry? cacheEntry))
+        if (_memoryCache != null && _memoryCache.TryGetValue(uri, out ICacheEntry? cacheEntry))
         {
             return cacheEntry?.Value as ICollection<TResponse> ?? throw new UnreachableException();
         }
 
         var client = CreateHttpClient(config, uri);
         var content = new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
-        var response = await DeserializeResponse<ICollection<TResponse>>(await client.GetAsync(uri, ct));
+        var response = await DeserializeResponse<ICollection<TResponse>>(await client.GetAsync(uri, ct), config.FromJsonProperty);
 
         TimeSpan.TryParse(config?.CacheTime, out var cachingTime);
-        if (cachingTime > TimeSpan.Zero)
+        if (_memoryCache != null && cachingTime > TimeSpan.Zero)
         {
             cacheEntry = _memoryCache.CreateEntry(uri);
             cacheEntry.Value = response;
@@ -210,7 +230,7 @@ public sealed class HttpService
         var uri = GetUri(config, null, queryParameters);
         var client = CreateHttpClient(config, uri);
         var content = new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
-        var response = await DeserializeResponse<TResponse>(await client.PostAsync(uri, content, ct));
+        var response = await DeserializeResponse<TResponse>(await client.PostAsync(uri, content, ct), config.FromJsonProperty);
         return response;
     }
 
@@ -240,7 +260,7 @@ public sealed class HttpService
         var uri = GetUri(config, null, queryParameters);
         var client = CreateHttpClient(config, uri);
         var content = new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
-        var response = await DeserializeResponse<TResponse>(await client.PutAsync(uri, content, ct));
+        var response = await DeserializeResponse<TResponse>(await client.PutAsync(uri, content, ct), config.FromJsonProperty);
         return response;
     }
 
@@ -270,7 +290,7 @@ public sealed class HttpService
         var uri = GetUri(config, null, queryParameters);
         var client = CreateHttpClient(config, uri);
         var content = new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json");
-        var response = await DeserializeResponse<TResponse>(await client.PatchAsync(uri, content, ct));
+        var response = await DeserializeResponse<TResponse>(await client.PatchAsync(uri, content, ct), config.FromJsonProperty);
         return response;
     }
 
@@ -294,8 +314,9 @@ public sealed class HttpService
     /// </summary>
     /// <typeparam name="TResponse">Type to deserialize into.</typeparam>
     /// <param name="responseMessage">The response message.</param>
+    /// <param name="fromJsonProperty">(Optional) the JSON property that we must use for deserialization.</param>
     /// <exception cref="HttpClientException">Thrown when HTTP request was not successful.</exception>
-    private static async ValueTask<TResponse?> DeserializeResponse<TResponse>(HttpResponseMessage? responseMessage)
+    private static async ValueTask<TResponse?> DeserializeResponse<TResponse>(HttpResponseMessage? responseMessage, string? fromJsonProperty)
     {
         if (responseMessage != null)
         {
@@ -303,7 +324,18 @@ public sealed class HttpService
             {
                 throw new HttpClientException((int)responseMessage.StatusCode, responseMessage.StatusCode.ToString());
             }
-
+            if (fromJsonProperty != null)
+            {
+                using JsonDocument document = JsonDocument.Parse(await responseMessage.Content.ReadAsStringAsync());
+                if (document.RootElement.TryGetProperty(fromJsonProperty, out JsonElement jsonElement))
+                {
+                    return JsonSerializer.Deserialize<TResponse>(jsonElement.GetRawText(), _jsonSerializerOptions);
+                }
+                else
+                {
+                    throw new JsonException($"Property '{fromJsonProperty}' not found in JSON.");
+                }
+            }
             return await responseMessage.Content.ReadFromJsonAsync<TResponse>();
         }
 
@@ -381,9 +413,13 @@ public sealed class HttpService
     private string GetUri<TConfig>(TConfig config, object[]? requestArguments, (string, string)[]? queryParameters)
         where TConfig : HttpAttribute
     {
-        int? argLength = config.ArgumentProperties?.Length;
+        int argLength = config.ArgumentProperties?.Length ?? 0;
+        if (argLength == 0)
+        {
+            argLength = requestArguments?.Length ?? 0;
+        }
         StringBuilder sb = new StringBuilder();
-        if (config.ArgumentProperties == null || !argLength.HasValue || argLength.Value == 0)
+        if (config.ArgumentProperties == null || argLength == 0)
         {
             sb.Append(config.ApiEndpoint);
         }
@@ -434,4 +470,22 @@ public sealed class HttpService
         return client;
     }
 
+    /// <summary>
+    /// Used to get the required arguments count from ApiEndpoint string.
+    /// </summary>
+    /// <param name="input">String, should be the ApiEndpoint.</param>
+    /// <returns>The number of or required arguments</returns>
+    private static int GetRequiredArguments(string input)
+    {
+        int count = 0;
+        for (int i = 0; i < input.Length; i++)
+        {
+            if (input[i] == '{' && i + 1 < input.Length && input.IndexOf('}', i) > i)
+            {
+                count++;
+                i = input.IndexOf('}', i); // Move index to the closing brace
+            }
+        }
+        return count;
+    }
 }

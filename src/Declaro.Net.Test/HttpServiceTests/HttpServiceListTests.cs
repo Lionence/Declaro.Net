@@ -2,6 +2,7 @@
 using Declaro.Net.Test.Helpers;
 using Declaro.Net.Test.TestDataTypes;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using RichardSzalay.MockHttp;
 using System.Net;
 using System.Net.Http.Json;
@@ -32,7 +33,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             mockHttpMessageHandler.Expect(HttpMethod.Get, $"http://127.0.0.1/{expectedUri}")
                 .Respond(HttpStatusCode.OK, JsonContent.Create(listResponse));
             var factory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
-            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             var response = await httpService.ListAsync(listRequest, queryParameters: ("Disctrict", "13"));
@@ -68,7 +70,8 @@ namespace Declaro.Net.Test.HttpServiceTests
             mockHttpMessageHandler.Expect(HttpMethod.Get, $"http://127.0.0.1/{expectedUri}")
                 .Respond(HttpStatusCode.OK, JsonContent.Create(listResponse));
             var factory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
-            var httpService = new HttpService(factory, new MemoryCache(new MemoryCacheOptions()));
+            var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
+            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             var response = await httpService.ListAsync<WeatherResponse, WeatherRequest>(listRequest, queryParameters: ("Disctrict", "13"));
