@@ -8,7 +8,7 @@ namespace Declaro.Net
         public static IServiceCollection AddHttpService(this IServiceCollection serviceCollection, Func<HttpClient, HttpClient>? configureHttpClient = null)
         {
             var httpclientFactor = new HttpClientFactory(configureHttpClient);
-            serviceCollection.AddKeyedSingleton<IHttpClientFactory>("f7b68ed9-749f-4d9f-a537-4416e6084b30_Declaro_HttpClientFactory", httpclientFactor);
+            serviceCollection.AddKeyedSingleton<IHttpClientFactory>(Constants.HTTPCLIENTFACTORY_DI_KEY, httpclientFactor);
             serviceCollection.AddSingleton<HttpService>();
             return serviceCollection;
         }
