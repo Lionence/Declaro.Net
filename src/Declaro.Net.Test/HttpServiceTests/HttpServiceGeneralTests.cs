@@ -446,5 +446,23 @@ namespace Declaro.Net.Test.HttpServiceTests
             Assert.True(response.City == "Budapest");
             Assert.True(response.Country == "Hungary");
         }
+
+        [Fact]
+        public void Validate_DependencyInjection_Logger_Found()
+        {
+            // Arrange
+            var sp = new ServiceCollection()
+            .AddLogging()
+            .AddMemoryCache()
+            .AddHttpService(c => { c.BaseAddress = new Uri("https://127.0.0.1/"); return c; })
+            .BuildServiceProvider();
+
+            // Act
+            var httpService = sp.GetRequiredService<HttpService>();
+
+            // Assert
+
+            Assert.True(httpService != null);
+        }
     }
 }

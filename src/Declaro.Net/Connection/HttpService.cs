@@ -10,6 +10,7 @@ using Declaro.Net.Exceptions;
 using System.Text.Json;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Declaro.Net.Connection;
 
@@ -64,7 +65,7 @@ public sealed class HttpService
         _httpConfigCache = new ReadOnlyDictionary<Type, HttpAttribute[]>(httpConfigCache);
     }
 
-    public HttpService(ILogger<HttpService> logger, IHttpClientFactory httpClientFactory, IMemoryCache? memoryCache)
+    public HttpService(ILogger<HttpService> logger, [FromKeyedServices(Constants.HTTPCLIENTFACTORY_DI_KEY)] IHttpClientFactory httpClientFactory, IMemoryCache? memoryCache)
     {
         _logger = logger;
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(HttpClient));
