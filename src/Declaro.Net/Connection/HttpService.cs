@@ -11,6 +11,8 @@ using System.Text.Json;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using System.Net;
 
 namespace Declaro.Net.Connection;
 
@@ -22,6 +24,7 @@ public sealed class HttpService
     private readonly ILogger<HttpService> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IMemoryCache? _memoryCache;
+    private readonly IConfiguration _configuration;
     private static readonly ReadOnlyDictionary<Type, HttpAttribute[]> _httpConfigCache;
     private static JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
@@ -65,12 +68,12 @@ public sealed class HttpService
         _httpConfigCache = new ReadOnlyDictionary<Type, HttpAttribute[]>(httpConfigCache);
     }
 
-    public HttpService(ILogger<HttpService> logger, [FromKeyedServices(Constants.HTTPCLIENTFACTORY_DI_KEY)] IHttpClientFactory httpClientFactory, IMemoryCache? memoryCache)
+    public HttpService(ILogger<HttpService> logger, [FromKeyedServices(Constants.HTTPCLIENTFACTORY_DI_KEY)] IHttpClientFactory httpClientFactory, IMemoryCache? memoryCache, IConfiguration configuration)
     {
         _logger = logger;
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(HttpClient));
         _memoryCache = memoryCache;
-
+        _configuration = configuration;
         bool warn = false;
         foreach (var config in _httpConfigCache)
         {
@@ -125,7 +128,8 @@ public sealed class HttpService
     {
         var config = GetHttpConfig<TResponse, HttpGetAttribute>();
 
-        int requiredArgumentsCount = GetRequiredArguments(config.ApiEndpoint);
+        var endpoint = GetApiEndpoint(config);
+        int requiredArgumentsCount = GetRequiredArguments(endpoint);
         int? argLength = config.ArgumentProperties?.Length;
         if (requiredArgumentsCount != requestArguments?.Length && argLength.HasValue && argLength.Value != requestArguments?.Length)
         {
@@ -145,7 +149,7 @@ public sealed class HttpService
 
         if (response == null)
         {
-            throw new NullReferenceException($"Empty response for GET: {typeof(TResponse).Name} on endpoint '{config?.ApiEndpoint}'");
+            throw new NullReferenceException($"Empty response for GET: {typeof(TResponse).Name} on endpoint '{endpoint}'");
         }
 
         TimeSpan.TryParse(config?.CacheTime, out var cachingTime);
@@ -392,15 +396,21 @@ public sealed class HttpService
         TAttribute? defaultValue = null;
         if(defaultAttribute != null)
         {
-            defaultValue = Activator.CreateInstance<TAttribute>();
-            defaultValue.ApiEndpoint = defaultAttribute.ApiEndpoint;
+            defaultValue = (TAttribute)Activator.CreateInstance(
+                typeof(TAttribute),
+#if RELEASE
+                defaultAttribute.ApiEndpoint,
+#endif
+                defaultAttribute.ApiEndpointEnvVarName,
+                defaultAttribute.ApiEndpointConfigurationKey
+            )!;
             defaultValue.Headers = defaultAttribute.Headers;
             defaultValue.Authorization = defaultAttribute?.Authorization;
             defaultValue.ArgumentProperties = defaultAttribute?.ArgumentProperties;
             defaultValue.RequestType = defaultAttribute?.RequestType;
             defaultValue.ResponseType = defaultAttribute?.ResponseType;
         }
-
+        
         var result = (TAttribute?)configs.SingleOrDefault(attr => attr?.GetType() == typeof(TAttribute), defaultValue);
 
         if (result == null)
@@ -420,13 +430,14 @@ public sealed class HttpService
             argLength = requestArguments?.Length ?? 0;
         }
         StringBuilder sb = new StringBuilder();
+        var endpont = GetApiEndpoint(config);
         if (config.ArgumentProperties == null || argLength == 0)
         {
-            sb.Append(config.ApiEndpoint);
+            sb.Append(endpont);
         }
         else
         {
-            sb.Append(string.Format(config.ApiEndpoint, requestArguments ?? Array.Empty<object>()));
+            sb.Append(string.Format(endpont, requestArguments ?? Array.Empty<object>()));
         }
 
         if (queryParameters != null)
@@ -469,6 +480,30 @@ public sealed class HttpService
             client.DefaultRequestHeaders.Add(header.Key, header.Value);
         }
         return client;
+    }
+
+    /// <summary>
+    /// Gets the API Endpoint from the given HttpAttribute
+    /// </summary>
+    private string GetApiEndpoint(HttpAttribute config)
+    {
+        string? endpoint = null;
+#if RELEASE
+        if(config.ApiEndpoint != null)
+        {
+            endpoint = config.ApiEndpoint;
+        }
+#endif
+        if(config.ApiEndpointEnvVarName != null)
+        {
+            endpoint = Environment.GetEnvironmentVariable(config.ApiEndpointEnvVarName);
+        }
+        if(config.ApiEndpointConfigurationKey != null)
+        {
+            endpoint = _configuration.GetValue<string>(config.ApiEndpointConfigurationKey);
+        }
+
+        return endpoint!;
     }
 
     /// <summary>

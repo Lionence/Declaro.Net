@@ -26,6 +26,22 @@ public sealed class WeatherRequest : IWeatherRequest
     public required string? Date { get; set; }
 }
 
+[HttpGet(ApiEndpointEnvVarName = "WEATHER_REPONSE_ENDPOINT", RequestType = typeof(WeatherRequest))]
+public class WeatherResponseUsingEnvVarName : IWeatherResponse
+{
+    public required int Celsius { get; set; }
+
+    public required string? City { get; set; }
+}
+
+[HttpGet(ApiEndpointConfigurationKey = "Endpoints:WeatherResponse", RequestType = typeof(WeatherRequest))]
+public class WeatherResponseUsingConfigurationKey : IWeatherResponse
+{
+    public required int Celsius { get; set; }
+
+    public required string? City { get; set; }
+}
+
 [Http(ApiEndpoint = "api/weather")]
 [HttpGet(ApiEndpoint = "api/weather?City={0}&Date={1}")]
 public sealed class WeatherRequestResponse : IWeatherResponse, IWeatherRequest

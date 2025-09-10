@@ -1,5 +1,6 @@
 ﻿using Declaro.Net.Connection;
 using Declaro.Net.Test.Helpers;
+using Declaro.Net.Test.HttpServiceTests.Base;
 using Declaro.Net.Test.TestDataTypes;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,7 @@ using System.Net.Http.Json;
 
 namespace Declaro.Net.Test.HttpServiceTests
 {
-    public class HttpServiceListTests
+    public class HttpServiceListTests : HttpServiceTestBase
     {
         [Fact]
         public async Task ListAsync_SameType()
@@ -34,7 +35,7 @@ namespace Declaro.Net.Test.HttpServiceTests
                 .Respond(HttpStatusCode.OK, JsonContent.Create(listResponse));
             var factory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
             var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
-            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()));
+            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()), TestConfiguration);
 
             // Act
             var response = await httpService.ListAsync(listRequest, queryParameters: ("Disctrict", "13"));
@@ -71,7 +72,7 @@ namespace Declaro.Net.Test.HttpServiceTests
                 .Respond(HttpStatusCode.OK, JsonContent.Create(listResponse));
             var factory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
             var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
-            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()));
+            var httpService = new HttpService(logger, factory, new MemoryCache(new MemoryCacheOptions()), TestConfiguration);
 
             // Act
             var response = await httpService.ListAsync<WeatherResponse, WeatherRequest>(listRequest, queryParameters: ("Disctrict", "13"));

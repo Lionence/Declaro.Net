@@ -20,7 +20,7 @@ namespace Declaro.Net.Test.HttpServiceTests
             var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
             var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
-            var httpService = new HttpService(logger, mockHttpClientFactory, memoryCache);
+            var httpService = new HttpService(logger, mockHttpClientFactory, memoryCache, TestConfiguration);
             var expectedUri = "api/weather?City=Budapest&Date=2023-09-22&District=13";
 
             mockHttpMessageHandler
@@ -52,7 +52,7 @@ namespace Declaro.Net.Test.HttpServiceTests
             var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
             var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
-            var httpService = new HttpService(logger, mockHttpClientFactory, memoryCache);
+            var httpService = new HttpService(logger, mockHttpClientFactory, memoryCache, TestConfiguration);
             var expectedUri = "api/weather?City=Budapest&Date=2023-09-22&District=13";
 
             mockHttpMessageHandler
@@ -80,7 +80,7 @@ namespace Declaro.Net.Test.HttpServiceTests
             var mockHttpClientFactory = new MockHttpClientFactory(mockHttpMessageHandler, "http://127.0.0.1/");
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
             var logger = new Logger<HttpService>(LoggerFactory.Create(configure => { }));
-            var httpService = new HttpService(logger, mockHttpClientFactory, memoryCache);
+            var httpService = new HttpService(logger, mockHttpClientFactory, memoryCache, TestConfiguration);
             var expectedUri = "api/weather?City=Budapest&Date=2023-09-22&District=13";
 
             mockHttpMessageHandler

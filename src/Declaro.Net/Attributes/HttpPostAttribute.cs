@@ -5,5 +5,6 @@
     /// </summary>
     public class HttpPostAttribute : HttpAttribute
     {
+        public HttpPostAttribute(string? apiEndpoint = null, string? apiEndpointEnvVarName = null, string? apiEndpointConfigurationKey = null) : base(apiEndpoint, apiEndpointEnvVarName, apiEndpointConfigurationKey) { }
     }
 }

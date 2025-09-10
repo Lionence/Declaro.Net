@@ -12,5 +12,7 @@
         /// Not setting this property will result in no caching.
         /// </summary>
         public string? CacheTime { get; set; }
+
+        public HttpListAttribute(string? apiEndpoint = null, string? apiEndpointEnvVarName = null, string? apiEndpointConfigurationKey = null) : base(apiEndpoint, apiEndpointEnvVarName, apiEndpointConfigurationKey) { }
     }
 }

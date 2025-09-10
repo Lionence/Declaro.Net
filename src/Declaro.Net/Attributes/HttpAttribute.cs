@@ -8,11 +8,69 @@ namespace Declaro.Net.Attributes
     {
         private HttpAuthorization? _authorization;
 
+        public HttpAttribute(
+            string? apiEndpoint = null,
+            string? apiEndpointEnvVarName = null,
+            string? apiEndpointConfigurationKey = null)
+        {
+            int suppliedCount = 0;
+            var errorMessage = $"Exactly one of " +
+#if RELEASE
+                    $"{nameof(ApiEndpoint)}, " +
+#endif
+                    $"{nameof(ApiEndpointEnvVarName)}, " +
+                    $"or {nameof(ApiEndpointConfigurationKey)} must be provided.";
+
+            if (!string.IsNullOrWhiteSpace(apiEndpoint))
+            {
+                suppliedCount++;
+#if RELEASE
+                ApiEndpoint = apiEndpoint;
+#endif
+            }
+            if (!string.IsNullOrWhiteSpace(apiEndpointEnvVarName))
+            {
+                if(suppliedCount != 0)
+                {
+                    throw new Exception(errorMessage);
+                }
+                suppliedCount++;
+                ApiEndpointEnvVarName = apiEndpointEnvVarName;
+            }
+            if (!string.IsNullOrWhiteSpace(apiEndpointConfigurationKey))
+            {
+                if (suppliedCount != 0)
+                {
+                    throw new Exception(errorMessage);
+                }
+                suppliedCount++;
+                ApiEndpointConfigurationKey = apiEndpointConfigurationKey;
+            }
+        }
+
         /// <summary>
+        /// DROPPING SUPPORT FROM v1.4.0
         /// The API endpoint to be used by the request.
         /// Supports templating.
         /// </summary>
-        public required string ApiEndpoint { get; set; }
+#if DEBUG
+        [Obsolete(message: $"Use {nameof(ApiEndpointEnvVarName)} or {nameof(ApiEndpointConfigurationKey)} instead.", error: true)]
+#else
+        [Obsolete(message: $"Use {nameof(ApiEndpointEnvVarName)} or {nameof(ApiEndpointConfigurationKey)} instead.", error: false)]
+#endif
+        public string ApiEndpoint { get; set; }
+
+        /// <summary>
+        /// Sets which API Endpoint to use based on the supplied name of environment variable.
+        /// Supports templating.
+        /// </summary>
+        public string ApiEndpointEnvVarName { get; init; }
+
+        /// <summary>
+        /// Sets which API Endpoint to use based on the supplied Configuration key.
+        /// Supports templating.
+        /// </summary>
+        public string ApiEndpointConfigurationKey { get; init; }
 
         /// <summary>
         /// Authorization method for the API. Do not specify if not required.

@@ -5,5 +5,6 @@
     /// </summary>
     public sealed class HttpPutAttribute : HttpAttribute
     {
+        public HttpPutAttribute(string? apiEndpoint = null, string? apiEndpointEnvVarName = null, string? apiEndpointConfigurationKey = null) : base(apiEndpoint, apiEndpointEnvVarName, apiEndpointConfigurationKey) { }
     }
 }
